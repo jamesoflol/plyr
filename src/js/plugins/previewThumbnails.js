@@ -301,7 +301,7 @@ class PreviewThumbnails {
             }
         }
 
-        // Only proceed if either thumbnum or thumbfilename has changed
+        // Only proceed if thumbnum has changed
         if (thumbNum !== this.showingThumb) {
             this.showingThumb = thumbNum;
             this.loadImage(qualityIndex);
@@ -310,54 +310,59 @@ class PreviewThumbnails {
 
     // Show the image that's currently specified in this.showingThumb
     loadImage(qualityIndex = 0) {
-        let thumbNum = this.showingThumb;
-
-        const frame = this.thumbnailsDefs[qualityIndex].frames[thumbNum];
-        const thumbFilename = this.thumbnailsDefs[qualityIndex].frames[thumbNum].text;
+        const frame = this.thumbnailsDefs[qualityIndex].frames[this.showingThumb];
+        this.showingThumbFilename = frame.text;
         const urlPrefix = this.thumbnailsDefs[qualityIndex].urlPrefix;
-        const thumbURL = urlPrefix + thumbFilename;
+        const thumbURL = urlPrefix + this.showingThumbFilename;
 
-        if (!this.currentImageElement || this.currentImageElement.getAttribute('data-thumbfilename') !== thumbFilename) {
+        if (!this.currentImageElement || this.currentImageElement.getAttribute('data-thumbfilename') !== this.showingThumbFilename) {
+            // Download a new image/sprite file
+
             // If we're already loading a previous image, remove its onload handler - we don't want it to load after this one
-            // Only do this if not using jpeg sprites. Without jpeg sprites we really want to show as many images as possible, as a best-effort
-            if (this.loadingImage && this.usingJpegSprites) this.loadingImage.onload = null;
+            if (this.loadingImage) this.loadingImage.onload = null;
 
             // We're building and adding a new image. In other implementations of similar functionality (Youtube), background image is instead used. But this causes issues with larger images in Firefox and Safari - switching between background images causes a flicker. Putting a new image over the top does not
             const previewImage = new Image();
             previewImage.src = thumbURL;
-            previewImage.setAttribute('data-thumbnum', thumbNum);
-            previewImage.setAttribute('data-thumbfilename', thumbFilename);
-            this.showingThumbFilename = thumbFilename;
+            previewImage.setAttribute('data-thumbnum', this.showingThumb);
+            previewImage.setAttribute('data-thumbfilename', this.showingThumbFilename);
 
             // For some reason, passing the named function directly causes it to execute immediately. So I've wrapped it in an anonymous function...
-            previewImage.onload = () => this.showImage(previewImage, frame, qualityIndex, thumbNum, thumbFilename, true);
+            previewImage.onload = () => this.showImage(previewImage, frame, qualityIndex, this.showingThumb, this.showingThumbFilename, true);
             this.loadingImage = previewImage;
             this.removeOldImages(previewImage);
         } else {
             // Update the existing image
-            this.showImage(this.currentImageElement, frame, qualityIndex, thumbNum, thumbFilename, false);
-            this.currentImageElement.setAttribute('data-thumbnum', thumbNum);
+            this.showImage(this.currentImageElement, frame, qualityIndex, this.showingThumb, this.showingThumbFilename, false);
+            this.currentImageElement.setAttribute('data-thumbnum', this.showingThumb);
             this.removeOldImages(this.currentImageElement);
         }
     }
 
     showImage(previewImage, frame, qualityIndex, thumbNum, thumbFilename, newImage = true) {
-        this.player.debug.log('Showing thumb: ' + thumbFilename + '. num: ' + thumbNum + '. qual: ' + qualityIndex + '. newimg: ' + newImage);
-        this.setImageSizeAndOffset(previewImage, frame);
+        // Only show if the user is still hovering the same spot
+        // if (thumbFilename === this.showingThumbFilename) {
+        if (this.showingThumb && this.showingThumb === thumbNum) {
+            this.player.debug.log('Showing thumb: ' + thumbFilename + '. num: ' + thumbNum + `. xy:${frame.x},${frame.y}` + '. qual: ' + qualityIndex + '. newimg: ' + newImage);
+            this.setImageSizeAndOffset(previewImage, frame);
 
-        if (newImage) {
-            this.currentContainer.appendChild(previewImage);
-            this.currentImageElement = previewImage;
+            if (newImage) {
+                this.currentContainer.appendChild(previewImage);
+                this.currentImageElement = previewImage;
 
-            if (!this.loadedImages.includes(thumbFilename)) this.loadedImages.push(thumbFilename);
+                if (!this.loadedImages.includes(thumbFilename)) this.loadedImages.push(thumbFilename);
+            }
+
+            // Preload images before and after the current one
+            // Then show higher quality of the same frame
+            this.preloadNearby(thumbNum, true)
+                .then(() => this.preloadNearby(thumbNum, false))
+                .then(() => this.getHigherQuality(qualityIndex, previewImage, frame, thumbFilename, thumbNum))
+                .catch(err => {
+                    // Only spit up real errors, not promise rejections for "stale" images
+                    if (err instanceof Error) this.player.debug.error(err);
+                })
         }
-
-        // Preload images before and after the current one
-        // Show higher quality of the same frame
-        // Each step here has a short time delay, and only continues if still hovering/seeking the same spot. This is to protect slow connections from overloading
-        this.preloadNearby(thumbNum, true)
-            .then(this.preloadNearby(thumbNum, false))
-            .then(this.getHigherQuality(qualityIndex, previewImage, frame, thumbFilename));
     }
 
     // Remove all preview images that aren't the designated current image
@@ -388,56 +393,60 @@ class PreviewThumbnails {
     // This will only preload the lowest quality
     preloadNearby(thumbNum, forward = true) {
         return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                const oldThumbFilename = this.thumbnailsDefs[0].frames[thumbNum].text;
+            const oldThumbFilename = this.thumbnailsDefs[0].frames[thumbNum].text;
 
-                if (this.showingThumbFilename === oldThumbFilename) {
-                    // Find the nearest thumbs with different filenames. Sometimes it'll be the next index, but in the case of jpeg sprites, it might be 100+ away
-                    let thumbnailsDefsCopy
-                    if (forward) {
-                        thumbnailsDefsCopy = this.thumbnailsDefs[0].frames.slice(thumbNum);
-                    } else {
-                        thumbnailsDefsCopy = this.thumbnailsDefs[0].frames.slice(0, thumbNum).reverse();
-                    }
-
-                    let foundOne = false;
-
-                    for (const frame of thumbnailsDefsCopy) {
-                        const newThumbFilename = frame.text;
-
-                        if (newThumbFilename !== oldThumbFilename) {
-                            // Found one with a different filename. Make sure it hasn't already been loaded on this page visit
-                            if (!this.loadedImages.includes(newThumbFilename)) {
-                                foundOne = true;
-                                this.player.debug.log('Preloading thumb filename: ' + newThumbFilename);
-
-                                const urlPrefix = this.thumbnailsDefs[0].urlPrefix;
-                                const thumbURL = urlPrefix + newThumbFilename;
-
-                                const previewImage = new Image();
-                                previewImage.src = thumbURL;
-                                previewImage.onload = () => {
-                                    this.player.debug.log('Preloaded thumb filename: ' + newThumbFilename);
-                                    if (!this.loadedImages.includes(newThumbFilename)) this.loadedImages.push(newThumbFilename);
-
-                                    // We don't resolve until the thumb is loaded
-                                    resolve()
-                                };
-                            }
-
-                            break;
-                        }
-                    }
-
-                    // If there are none to preload then we want to resolve immediately
-                    if (!foundOne) resolve();
+            if (this.showingThumbFilename === oldThumbFilename) {
+                // Find the nearest thumbs with different filenames. Sometimes it'll be the next index, but in the case of jpeg sprites, it might be 100+ away
+                let thumbnailsDefsCopy
+                if (forward) {
+                    thumbnailsDefsCopy = this.thumbnailsDefs[0].frames.slice(thumbNum);
+                } else {
+                    thumbnailsDefsCopy = this.thumbnailsDefs[0].frames.slice(0, thumbNum).reverse();
                 }
-            }, 300)
+
+                let foundOne = false;
+
+                for (const frame of thumbnailsDefsCopy) {
+                    const newThumbFilename = frame.text;
+
+                    if (newThumbFilename !== oldThumbFilename) {
+                        // Found one with a different filename. Make sure it hasn't already been loaded on this page visit
+                        if (!this.loadedImages.includes(newThumbFilename)) {
+                            foundOne = true;
+                            this.player.debug.log('Preloading thumb filename: ' + newThumbFilename);
+
+                            const urlPrefix = this.thumbnailsDefs[0].urlPrefix;
+                            const thumbURL = urlPrefix + newThumbFilename;
+                            this.numLoading += 1;
+
+                            const previewImage = new Image();
+                            previewImage.src = thumbURL;
+                            previewImage.onload = () => {
+                                this.player.debug.log('Preloaded thumb filename: ' + newThumbFilename);
+                                if (!this.loadedImages.includes(newThumbFilename)) this.loadedImages.push(newThumbFilename);
+                                this.numLoading -= 1;
+
+                                // We don't resolve until the thumb is loaded
+                                resolve()
+                            };
+                        }
+
+                        break;
+                    }
+                }
+
+                // If there are none to preload then we want to resolve immediately - this includes if the next one is already preloaded
+                if (!foundOne) resolve();
+            }
+            else {
+                // User isn't hovering the same time any more - stop preloading for that time
+                reject('stale');
+            }
         })
     }
 
     // If user has been hovering current image for half a second, look for a higher quality one
-    getHigherQuality(currentQualityIndex, previewImage, frame, thumbFilename) {
+    getHigherQuality(currentQualityIndex, previewImage, frame, thumbFilename, thumbNum) {
         if (currentQualityIndex < this.thumbnailsDefs.length - 1) {
             // Only use the higher quality version if it's going to look any better - if the current thumb is of a lower pixel density than the thumbnail container
             let previewImageHeight = previewImage.naturalHeight;
@@ -445,13 +454,11 @@ class PreviewThumbnails {
 
             if (previewImageHeight < this.thumbContainerHeight) {
                 // Recurse back to the loadImage function - show a higher quality one, but only if the viewer is on this frame for a while
-                setTimeout(() => {
-                    // Make sure the mouse hasn't already moved on and started hovering at another image
-                    if (this.showingThumbFilename === thumbFilename) {
-                        this.player.debug.log('Showing higher quality thumb for: ' + thumbFilename)
-                        this.loadImage(currentQualityIndex + 1);
-                    }
-                }, 300)
+                // Make sure the mouse hasn't already moved on and started hovering at another image
+                if (this.showingThumb === thumbNum) {
+                    this.player.debug.log('Showing higher quality thumb for: ' + thumbFilename)
+                    this.loadImage(currentQualityIndex + 1);
+                }
             }
         }
     }
