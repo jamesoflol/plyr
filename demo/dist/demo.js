@@ -4150,7 +4150,7 @@ typeof navigator === "object" && (function () {
 	          controls: true
 	        },
 	        captions: {
-	          active: true
+	          active: false
 	        },
 	        keys: {
 	          google: 'AIzaSyDrNwtN3nLH_8rjCmu5Wq3ZCm4MNAVdc0c'
@@ -4158,6 +4158,13 @@ typeof navigator === "object" && (function () {
 	        ads: {
 	          enabled: env.prod || env.dev,
 	          publisherId: '918848828995742'
+	        },
+	        previewThumbnails: {
+	          enabled: true,
+	          src: [// 'https://s3-ap-southeast-2.amazonaws.com/videohop-resource-stack-dev-videoss3bucket-16p28oyrrtsoq/s3/v/bluemoon/30p/30p.vtt',
+	          // 'https://dev.videohop.com.au/s3/v/bkxvj83ae3k-hls/90p/thumbs/90p.vtt', // old non-sprite ones
+	          // 'https://dev.videohop.com.au/s3/v/bkxvj83ae3k-hls/240p/thumbs/240p.vtt', // old non-sprite ones
+	          'https://dev.videohop.com.au/s3/v/bluemoon/100p/100p.vtt', 'https://dev.videohop.com.au/s3/v/bluemoon/240p/240p.vtt']
 	        }
 	      }); // Expose for tinkering in the console
 
