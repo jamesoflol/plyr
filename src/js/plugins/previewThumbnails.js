@@ -342,8 +342,8 @@ class PreviewThumbnails {
 
     showImage(previewImage, frame, qualityIndex, thumbNum, thumbFilename, newImage = true) {
         // Only show if the user is still hovering the same spot
-        // if (thumbFilename === this.showingThumbFilename) {
-        if (this.showingThumb && this.showingThumb === thumbNum) {
+        // if (this.showingThumb && this.showingThumb === thumbNum) {
+        if (this.showingThumb === thumbNum) {
             this.player.debug.log('Showing thumb: ' + thumbFilename + '. num: ' + thumbNum + `. xy:${frame.x},${frame.y}` + '. qual: ' + qualityIndex + '. newimg: ' + newImage);
             this.setImageSizeAndOffset(previewImage, frame);
 
@@ -356,8 +356,8 @@ class PreviewThumbnails {
 
             // Preload images before and after the current one
             // Then show higher quality of the same frame
-            this.preloadNearby(thumbNum, true)
-                .then(() => this.preloadNearby(thumbNum, false))
+            this.preloadNearby(thumbNum, true, qualityIndex)
+                .then(() => this.preloadNearby(thumbNum, false, qualityIndex))
                 .then(() => this.getHigherQuality(qualityIndex, previewImage, frame, thumbFilename, thumbNum))
                 .catch(err => {
                     // Only spit up real errors, not promise rejections for "stale" images
@@ -391,18 +391,18 @@ class PreviewThumbnails {
     }
 
     // Preload images before and after the current one. Only if the user is still hovering/seeking the same frame
-    // This will only preload the lowest quality
-    preloadNearby(thumbNum, forward = true) {
+    // Note that this will not be effective for non-sprited images, and as such should probably be prevented. (Because without spriting, the next hovered image is rarely +1 or -1 from the current one.)
+    preloadNearby(thumbNum, forward = true, qualityIndex = 0) {
         return new Promise((resolve, reject) => {
-            const oldThumbFilename = this.thumbnailsDefs[0].frames[thumbNum].text;
+            const oldThumbFilename = this.thumbnailsDefs[qualityIndex].frames[thumbNum].text;
 
             if (this.showingThumbFilename === oldThumbFilename) {
                 // Find the nearest thumbs with different filenames. Sometimes it'll be the next index, but in the case of jpeg sprites, it might be 100+ away
                 let thumbnailsDefsCopy
                 if (forward) {
-                    thumbnailsDefsCopy = this.thumbnailsDefs[0].frames.slice(thumbNum);
+                    thumbnailsDefsCopy = this.thumbnailsDefs[qualityIndex].frames.slice(thumbNum);
                 } else {
-                    thumbnailsDefsCopy = this.thumbnailsDefs[0].frames.slice(0, thumbNum).reverse();
+                    thumbnailsDefsCopy = this.thumbnailsDefs[qualityIndex].frames.slice(0, thumbNum).reverse();
                 }
 
                 let foundOne = false;
@@ -416,7 +416,7 @@ class PreviewThumbnails {
                             foundOne = true;
                             this.player.debug.log('Preloading thumb filename: ' + newThumbFilename);
 
-                            const urlPrefix = this.thumbnailsDefs[0].urlPrefix;
+                            const urlPrefix = this.thumbnailsDefs[qualityIndex].urlPrefix;
                             const thumbURL = urlPrefix + newThumbFilename;
                             this.numLoading += 1;
 
