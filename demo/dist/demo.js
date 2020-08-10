@@ -1,7 +1,7 @@
 typeof navigator === "object" && (function () {
 	'use strict';
 
-	var commonjsGlobal = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+	var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
 	function createCommonjsModule(fn, module) {
 		return module = { exports: {} }, fn(module, module.exports), module.exports;
@@ -755,7 +755,11 @@ typeof navigator === "object" && (function () {
 	var _window$1 =
 	  typeof window !== 'undefined'
 	    ? window
-	    : typeof commonjsGlobal !== 'undefined' ? commonjsGlobal : typeof self !== 'undefined' ? self : {};
+	    : typeof commonjsGlobal !== 'undefined'
+	    ? commonjsGlobal
+	    : typeof self !== 'undefined'
+	    ? self
+	    : {};
 
 	// global reference to slice
 	var _slice = [].slice;
@@ -1008,11 +1012,14 @@ typeof navigator === "object" && (function () {
 	    // slow slow IE to see if onerror occurs or not before reporting
 	    // this exception; otherwise, we will end up with an incomplete
 	    // stack trace
-	    setTimeout(function() {
-	      if (lastException === ex) {
-	        processLastException();
-	      }
-	    }, stack.incomplete ? 2000 : 0);
+	    setTimeout(
+	      function() {
+	        if (lastException === ex) {
+	          processLastException();
+	        }
+	      },
+	      stack.incomplete ? 2000 : 0
+	    );
 
 	    if (rethrow !== false) {
 	      throw ex; // re-throw to propagate to the top level (and cause window.onerror)
@@ -1127,7 +1134,7 @@ typeof navigator === "object" && (function () {
 	    var winjs = /^\s*at (?:((?:\[object object\])?.+) )?\(?((?:file|ms-appx(?:-web)|https?|webpack|blob):.*?):(\d+)(?::(\d+))?\)?\s*$/i;
 	    // NOTE: blob urls are now supposed to always have an origin, therefore it's format
 	    // which is `blob:http://url/path/with-some-uuid`, is matched by `blob.*?:\/` as well
-	    var gecko = /^\s*(.*?)(?:\((.*?)\))?(?:^|@)((?:file|https?|blob|chrome|webpack|resource|moz-extension).*?:\/.*?|\[native code\]|[^@]*bundle)(?::(\d+))?(?::(\d+))?\s*$/i;
+	    var gecko = /^\s*(.*?)(?:\((.*?)\))?(?:^|@)((?:file|https?|blob|chrome|webpack|resource|moz-extension).*?:\/.*?|\[native code\]|[^@]*(?:bundle|\d+\.js))(?::(\d+))?(?::(\d+))?\s*$/i;
 	    // Used to additionally parse URL/line/column from eval frames
 	    var geckoEval = /(\S+) line (\d+)(?: > eval line \d+)* > eval/i;
 	    var chromeEval = /\((\S*)(?::(\d+))(?::(\d+))\)/;
@@ -1873,7 +1880,7 @@ typeof navigator === "object" && (function () {
 	  // webpack (using a build step causes webpack #1617). Grunt verifies that
 	  // this value matches package.json during build.
 	  //   See: https://github.com/getsentry/raven-js/issues/465
-	  VERSION: '3.27.0',
+	  VERSION: '3.27.2',
 
 	  debug: false,
 
@@ -3656,6 +3663,9 @@ typeof navigator === "object" && (function () {
 	    } else if (current.exception || last.exception) {
 	      // Exception interface (i.e. from captureException/onerror)
 	      return isSameException$1(current.exception, last.exception);
+	    } else if (current.fingerprint || last.fingerprint) {
+	      return Boolean(current.fingerprint && last.fingerprint) &&
+	        JSON.stringify(current.fingerprint) === JSON.stringify(last.fingerprint)
 	    }
 
 	    return true;
@@ -4164,7 +4174,11 @@ typeof navigator === "object" && (function () {
 	          src: [// 'https://s3-ap-southeast-2.amazonaws.com/videohop-resource-stack-dev-videoss3bucket-16p28oyrrtsoq/s3/v/bluemoon/30p/30p.vtt',
 	          // 'https://dev.videohop.com.au/s3/v/bkxvj83ae3k-hls/90p/thumbs/90p.vtt', // old non-sprite ones
 	          // 'https://dev.videohop.com.au/s3/v/bkxvj83ae3k-hls/240p/thumbs/240p.vtt', // old non-sprite ones
-	          'https://dev.videohop.com.au/s3/v/bluemoon/100p/100p.vtt', 'https://dev.videohop.com.au/s3/v/bluemoon/240p/240p.vtt']
+	          'https://dev.videohop.com.au/s3/v/bluemoon/100p/100p.vtt', 'https://dev.videohop.com.au/s3/v/bluemoon/240p/240p.vtt' // 'https://s3-ap-southeast-2.amazonaws.com/videohop-resource-stack-dev-videoss3bucket-16p28oyrrtsoq/s3/v/bluemoon/100p-abs/100p.vtt',
+	          // ite531
+	          // 'https://s3-ap-southeast-2.amazonaws.com/videohop-resource-stack-dev-videoss3bucket-16p28oyrrtsoq/s3/v/nwzx95m8d8y-thumb-sprites/100p/100p.vtt',
+	          // 'https://s3-ap-southeast-2.amazonaws.com/videohop-resource-stack-dev-videoss3bucket-16p28oyrrtsoq/s3/v/nwzx95m8d8y-thumb-sprites/240p/240p.vtt',
+	          ]
 	        }
 	      }); // Expose for tinkering in the console
 

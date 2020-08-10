@@ -26,11 +26,9 @@ typeof navigator === "object" && (function (global, factory) {
     } catch (e) {
       var CustomEvent = function(event, params) {
         var evt, origPrevent;
-        params = params || {
-          bubbles: false,
-          cancelable: false,
-          detail: undefined
-        };
+        params = params || {};
+        params.bubbles = !!params.bubbles;
+        params.cancelable = !!params.cancelable;
 
         evt = document.createEvent('CustomEvent');
         evt.initCustomEvent(
@@ -60,7 +58,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   })();
 
-  var commonjsGlobal = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+  var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
   function createCommonjsModule(fn, module) {
   	return module = { exports: {} }, fn(module, module.exports), module.exports;
@@ -110,15 +108,16 @@ typeof navigator === "object" && (function (global, factory) {
     };
 
     var deserializeParam = function(value) {
-      return decodeURIComponent(value).replace(/\+/g, ' ');
+      return decodeURIComponent(String(value).replace(/\+/g, ' '));
     };
 
     var polyfillURLSearchParams = function() {
 
       var URLSearchParams = function(searchString) {
         Object.defineProperty(this, '_entries', { writable: true, value: {} });
+        var typeofSearchString = typeof searchString;
 
-        if (typeof searchString === 'string') {
+        if (typeofSearchString === 'undefined') ; else if (typeofSearchString === 'string') {
           if (searchString !== '') {
             this._fromString(searchString);
           }
@@ -127,6 +126,25 @@ typeof navigator === "object" && (function (global, factory) {
           searchString.forEach(function(value, name) {
             _this.append(name, value);
           });
+        } else if ((searchString !== null) && (typeofSearchString === 'object')) {
+          if (Object.prototype.toString.call(searchString) === '[object Array]') {
+            for (var i = 0; i < searchString.length; i++) {
+              var entry = searchString[i];
+              if ((Object.prototype.toString.call(entry) === '[object Array]') || (entry.length !== 2)) {
+                this.append(entry[0], entry[1]);
+              } else {
+                throw new TypeError('Expected [string, any] as entry at index ' + i + ' of URLSearchParams\'s input');
+              }
+            }
+          } else {
+            for (var key in searchString) {
+              if (searchString.hasOwnProperty(key)) {
+                this.append(key, searchString[key]);
+              }
+            }
+          }
+        } else {
+          throw new TypeError('Unsupported input\'s type for URLSearchParams');
         }
       };
 
@@ -134,9 +152,9 @@ typeof navigator === "object" && (function (global, factory) {
 
       proto.append = function(name, value) {
         if (name in this._entries) {
-          this._entries[name].push(value.toString());
+          this._entries[name].push(String(value));
         } else {
-          this._entries[name] = [value.toString()];
+          this._entries[name] = [String(value)];
         }
       };
 
@@ -157,7 +175,7 @@ typeof navigator === "object" && (function (global, factory) {
       };
 
       proto.set = function(name, value) {
-        this._entries[name] = [value.toString()];
+        this._entries[name] = [String(value)];
       };
 
       proto.forEach = function(callback, thisArg) {
@@ -208,34 +226,32 @@ typeof navigator === "object" && (function (global, factory) {
         return searchArray.join('&');
       };
 
-      Object.defineProperty(proto, '_fromString', {
-        enumerable: false,
-        configurable: false,
-        writable: false,
-        value: function(searchString) {
-          this._entries = {};
-          searchString = searchString.replace(/^\?/, '');
-          var attributes = searchString.split('&');
-          var attribute;
-          for (var i = 0; i < attributes.length; i++) {
-            attribute = attributes[i].split('=');
-            this.append(
-              deserializeParam(attribute[0]),
-              (attribute.length > 1) ? deserializeParam(attribute[1]) : ''
-            );
-          }
-        }
-      });
 
       global.URLSearchParams = URLSearchParams;
     };
 
-    if (!('URLSearchParams' in global) || (new URLSearchParams('?a=1').toString() !== 'a=1')) {
+    var checkIfURLSearchParamsSupported = function() {
+      try {
+        var URLSearchParams = global.URLSearchParams;
+
+        return (
+          (new URLSearchParams('?a=1').toString() === 'a=1') &&
+          (typeof URLSearchParams.prototype.set === 'function') &&
+          (typeof URLSearchParams.prototype.entries === 'function')
+        );
+      } catch (e) {
+        return false;
+      }
+    };
+
+    if (!checkIfURLSearchParamsSupported()) {
       polyfillURLSearchParams();
     }
 
-    if (typeof URLSearchParams.prototype.sort !== 'function') {
-      URLSearchParams.prototype.sort = function() {
+    var proto = global.URLSearchParams.prototype;
+
+    if (typeof proto.sort !== 'function') {
+      proto.sort = function() {
         var _this = this;
         var items = [];
         this.forEach(function(value, name) {
@@ -262,6 +278,38 @@ typeof navigator === "object" && (function (global, factory) {
       };
     }
 
+    if (typeof proto._fromString !== 'function') {
+      Object.defineProperty(proto, '_fromString', {
+        enumerable: false,
+        configurable: false,
+        writable: false,
+        value: function(searchString) {
+          if (this._entries) {
+            this._entries = {};
+          } else {
+            var keys = [];
+            this.forEach(function(value, name) {
+              keys.push(name);
+            });
+            for (var i = 0; i < keys.length; i++) {
+              this.delete(keys[i]);
+            }
+          }
+
+          searchString = searchString.replace(/^\?/, '');
+          var attributes = searchString.split('&');
+          var attribute;
+          for (var i = 0; i < attributes.length; i++) {
+            attribute = attributes[i].split('=');
+            this.append(
+              deserializeParam(attribute[0]),
+              (attribute.length > 1) ? deserializeParam(attribute[1]) : ''
+            );
+          }
+        }
+      });
+    }
+
     // HTMLAnchorElement
 
   })(
@@ -279,8 +327,8 @@ typeof navigator === "object" && (function (global, factory) {
 
     var checkIfURLIsSupported = function() {
       try {
-        var u = new URL('b', 'http://a');
-        u.pathname = 'c%20d';
+        var u = new global.URL('b', 'http://a');
+        u.pathname = 'c d';
         return (u.href === 'http://a/c%20d') && u.searchParams;
       } catch (e) {
         return false;
@@ -315,7 +363,11 @@ typeof navigator === "object" && (function (global, factory) {
           anchorElement.href = anchorElement.href; // force href to refresh
         }
 
-        if (anchorElement.protocol === ':' || !/:/.test(anchorElement.href)) {
+        var inputElement = doc.createElement('input');
+        inputElement.type = 'url';
+        inputElement.value = url;
+
+        if (anchorElement.protocol === ':' || !/:/.test(anchorElement.href) || (!inputElement.checkValidity() && !base)) {
           throw new TypeError('Invalid URL');
         }
 
@@ -325,7 +377,7 @@ typeof navigator === "object" && (function (global, factory) {
 
 
         // create a linked searchParams which reflect its changes on URL
-        var searchParams = new URLSearchParams(this.search);
+        var searchParams = new global.URLSearchParams(this.search);
         var enableSearchUpdate = true;
         var enableSearchParamsUpdate = true;
         var _this = this;
@@ -538,7 +590,7 @@ typeof navigator === "object" && (function (global, factory) {
   });
 
   var _core = createCommonjsModule(function (module) {
-  var core = module.exports = { version: '2.5.7' };
+  var core = module.exports = { version: '2.6.11' };
   if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
   });
   var _core_1 = _core.version;
@@ -634,14 +686,31 @@ typeof navigator === "object" && (function (global, factory) {
     return 'Symbol('.concat(key === undefined ? '' : key, ')_', (++id + px).toString(36));
   };
 
+  var _library = false;
+
+  var _shared = createCommonjsModule(function (module) {
+  var SHARED = '__core-js_shared__';
+  var store = _global[SHARED] || (_global[SHARED] = {});
+
+  (module.exports = function (key, value) {
+    return store[key] || (store[key] = value !== undefined ? value : {});
+  })('versions', []).push({
+    version: _core.version,
+    mode: 'global',
+    copyright: '© 2019 Denis Pushkarev (zloirock.ru)'
+  });
+  });
+
+  var _functionToString = _shared('native-function-to-string', Function.toString);
+
   var _redefine = createCommonjsModule(function (module) {
   var SRC = _uid('src');
+
   var TO_STRING = 'toString';
-  var $toString = Function[TO_STRING];
-  var TPL = ('' + $toString).split(TO_STRING);
+  var TPL = ('' + _functionToString).split(TO_STRING);
 
   _core.inspectSource = function (it) {
-    return $toString.call(it);
+    return _functionToString.call(it);
   };
 
   (module.exports = function (O, key, val, safe) {
@@ -661,7 +730,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   // add fake Function#toString for correct work wrapped methods / constructors with methods like LoDash isNative
   })(Function.prototype, TO_STRING, function toString() {
-    return typeof this == 'function' && this[SRC] || $toString.call(this);
+    return typeof this == 'function' && this[SRC] || _functionToString.call(this);
   });
   });
 
@@ -730,21 +799,6 @@ typeof navigator === "object" && (function (global, factory) {
   };
 
   var _iterators = {};
-
-  var _library = false;
-
-  var _shared = createCommonjsModule(function (module) {
-  var SHARED = '__core-js_shared__';
-  var store = _global[SHARED] || (_global[SHARED] = {});
-
-  (module.exports = function (key, value) {
-    return store[key] || (store[key] = value !== undefined ? value : {});
-  })('versions', []).push({
-    version: _core.version,
-    mode: 'global',
-    copyright: '© 2018 Denis Pushkarev (zloirock.ru)'
-  });
-  });
 
   var _wks = createCommonjsModule(function (module) {
   var store = _shared('wks');
@@ -1339,37 +1393,30 @@ typeof navigator === "object" && (function (global, factory) {
 
   _addToUnscopables('includes');
 
-  var _fixReWks = function (KEY, length, exec) {
-    var SYMBOL = _wks(KEY);
-    var fns = exec(_defined, SYMBOL, ''[KEY]);
-    var strfn = fns[0];
-    var rxfn = fns[1];
-    if (_fails(function () {
-      var O = {};
-      O[SYMBOL] = function () { return 7; };
-      return ''[KEY](O) != 7;
-    })) {
-      _redefine(String.prototype, KEY, strfn);
-      _hide(RegExp.prototype, SYMBOL, length == 2
-        // 21.2.5.8 RegExp.prototype[@@replace](string, replaceValue)
-        // 21.2.5.11 RegExp.prototype[@@split](string, limit)
-        ? function (string, arg) { return rxfn.call(string, this, arg); }
-        // 21.2.5.6 RegExp.prototype[@@match](string)
-        // 21.2.5.9 RegExp.prototype[@@search](string)
-        : function (string) { return rxfn.call(string, this); }
-      );
-    }
+  // 7.2.9 SameValue(x, y)
+  var _sameValue = Object.is || function is(x, y) {
+    // eslint-disable-next-line no-self-compare
+    return x === y ? x !== 0 || 1 / x === 1 / y : x != x && y != y;
   };
 
-  // @@search logic
-  _fixReWks('search', 1, function (defined, SEARCH, $search) {
-    // 21.1.3.15 String.prototype.search(regexp)
-    return [function search(regexp) {
-      var O = defined(this);
-      var fn = regexp == undefined ? undefined : regexp[SEARCH];
-      return fn !== undefined ? fn.call(regexp, O) : new RegExp(regexp)[SEARCH](String(O));
-    }, $search];
-  });
+  var builtinExec = RegExp.prototype.exec;
+
+   // `RegExpExec` abstract operation
+  // https://tc39.github.io/ecma262/#sec-regexpexec
+  var _regexpExecAbstract = function (R, S) {
+    var exec = R.exec;
+    if (typeof exec === 'function') {
+      var result = exec.call(R, S);
+      if (typeof result !== 'object') {
+        throw new TypeError('RegExp exec method returned something other than an Object or null');
+      }
+      return result;
+    }
+    if (_classof(R) !== 'RegExp') {
+      throw new TypeError('RegExp#exec called on incompatible receiver');
+    }
+    return builtinExec.call(R, S);
+  };
 
   // 21.2.5.3 get RegExp.prototype.flags
 
@@ -1383,6 +1430,183 @@ typeof navigator === "object" && (function (global, factory) {
     if (that.sticky) result += 'y';
     return result;
   };
+
+  var nativeExec = RegExp.prototype.exec;
+  // This always refers to the native implementation, because the
+  // String#replace polyfill uses ./fix-regexp-well-known-symbol-logic.js,
+  // which loads this file before patching the method.
+  var nativeReplace = String.prototype.replace;
+
+  var patchedExec = nativeExec;
+
+  var LAST_INDEX = 'lastIndex';
+
+  var UPDATES_LAST_INDEX_WRONG = (function () {
+    var re1 = /a/,
+        re2 = /b*/g;
+    nativeExec.call(re1, 'a');
+    nativeExec.call(re2, 'a');
+    return re1[LAST_INDEX] !== 0 || re2[LAST_INDEX] !== 0;
+  })();
+
+  // nonparticipating capturing group, copied from es5-shim's String#split patch.
+  var NPCG_INCLUDED = /()??/.exec('')[1] !== undefined;
+
+  var PATCH = UPDATES_LAST_INDEX_WRONG || NPCG_INCLUDED;
+
+  if (PATCH) {
+    patchedExec = function exec(str) {
+      var re = this;
+      var lastIndex, reCopy, match, i;
+
+      if (NPCG_INCLUDED) {
+        reCopy = new RegExp('^' + re.source + '$(?!\\s)', _flags.call(re));
+      }
+      if (UPDATES_LAST_INDEX_WRONG) lastIndex = re[LAST_INDEX];
+
+      match = nativeExec.call(re, str);
+
+      if (UPDATES_LAST_INDEX_WRONG && match) {
+        re[LAST_INDEX] = re.global ? match.index + match[0].length : lastIndex;
+      }
+      if (NPCG_INCLUDED && match && match.length > 1) {
+        // Fix browsers whose `exec` methods don't consistently return `undefined`
+        // for NPCG, like IE8. NOTE: This doesn' work for /(.?)?/
+        // eslint-disable-next-line no-loop-func
+        nativeReplace.call(match[0], reCopy, function () {
+          for (i = 1; i < arguments.length - 2; i++) {
+            if (arguments[i] === undefined) match[i] = undefined;
+          }
+        });
+      }
+
+      return match;
+    };
+  }
+
+  var _regexpExec = patchedExec;
+
+  _export({
+    target: 'RegExp',
+    proto: true,
+    forced: _regexpExec !== /./.exec
+  }, {
+    exec: _regexpExec
+  });
+
+  var SPECIES$1 = _wks('species');
+
+  var REPLACE_SUPPORTS_NAMED_GROUPS = !_fails(function () {
+    // #replace needs built-in support for named groups.
+    // #match works fine because it just return the exec results, even if it has
+    // a "grops" property.
+    var re = /./;
+    re.exec = function () {
+      var result = [];
+      result.groups = { a: '7' };
+      return result;
+    };
+    return ''.replace(re, '$<a>') !== '7';
+  });
+
+  var SPLIT_WORKS_WITH_OVERWRITTEN_EXEC = (function () {
+    // Chrome 51 has a buggy "split" implementation when RegExp#exec !== nativeExec
+    var re = /(?:)/;
+    var originalExec = re.exec;
+    re.exec = function () { return originalExec.apply(this, arguments); };
+    var result = 'ab'.split(re);
+    return result.length === 2 && result[0] === 'a' && result[1] === 'b';
+  })();
+
+  var _fixReWks = function (KEY, length, exec) {
+    var SYMBOL = _wks(KEY);
+
+    var DELEGATES_TO_SYMBOL = !_fails(function () {
+      // String methods call symbol-named RegEp methods
+      var O = {};
+      O[SYMBOL] = function () { return 7; };
+      return ''[KEY](O) != 7;
+    });
+
+    var DELEGATES_TO_EXEC = DELEGATES_TO_SYMBOL ? !_fails(function () {
+      // Symbol-named RegExp methods call .exec
+      var execCalled = false;
+      var re = /a/;
+      re.exec = function () { execCalled = true; return null; };
+      if (KEY === 'split') {
+        // RegExp[@@split] doesn't call the regex's exec method, but first creates
+        // a new one. We need to return the patched regex when creating the new one.
+        re.constructor = {};
+        re.constructor[SPECIES$1] = function () { return re; };
+      }
+      re[SYMBOL]('');
+      return !execCalled;
+    }) : undefined;
+
+    if (
+      !DELEGATES_TO_SYMBOL ||
+      !DELEGATES_TO_EXEC ||
+      (KEY === 'replace' && !REPLACE_SUPPORTS_NAMED_GROUPS) ||
+      (KEY === 'split' && !SPLIT_WORKS_WITH_OVERWRITTEN_EXEC)
+    ) {
+      var nativeRegExpMethod = /./[SYMBOL];
+      var fns = exec(
+        _defined,
+        SYMBOL,
+        ''[KEY],
+        function maybeCallNative(nativeMethod, regexp, str, arg2, forceStringMethod) {
+          if (regexp.exec === _regexpExec) {
+            if (DELEGATES_TO_SYMBOL && !forceStringMethod) {
+              // The native String method already delegates to @@method (this
+              // polyfilled function), leasing to infinite recursion.
+              // We avoid it by directly calling the native @@method method.
+              return { done: true, value: nativeRegExpMethod.call(regexp, str, arg2) };
+            }
+            return { done: true, value: nativeMethod.call(str, regexp, arg2) };
+          }
+          return { done: false };
+        }
+      );
+      var strfn = fns[0];
+      var rxfn = fns[1];
+
+      _redefine(String.prototype, KEY, strfn);
+      _hide(RegExp.prototype, SYMBOL, length == 2
+        // 21.2.5.8 RegExp.prototype[@@replace](string, replaceValue)
+        // 21.2.5.11 RegExp.prototype[@@split](string, limit)
+        ? function (string, arg) { return rxfn.call(string, this, arg); }
+        // 21.2.5.6 RegExp.prototype[@@match](string)
+        // 21.2.5.9 RegExp.prototype[@@search](string)
+        : function (string) { return rxfn.call(string, this); }
+      );
+    }
+  };
+
+  // @@search logic
+  _fixReWks('search', 1, function (defined, SEARCH, $search, maybeCallNative) {
+    return [
+      // `String.prototype.search` method
+      // https://tc39.github.io/ecma262/#sec-string.prototype.search
+      function search(regexp) {
+        var O = defined(this);
+        var fn = regexp == undefined ? undefined : regexp[SEARCH];
+        return fn !== undefined ? fn.call(regexp, O) : new RegExp(regexp)[SEARCH](String(O));
+      },
+      // `RegExp.prototype[@@search]` method
+      // https://tc39.github.io/ecma262/#sec-regexp.prototype-@@search
+      function (regexp) {
+        var res = maybeCallNative($search, regexp, this);
+        if (res.done) return res.value;
+        var rx = _anObject(regexp);
+        var S = String(this);
+        var previousLastIndex = rx.lastIndex;
+        if (!_sameValue(previousLastIndex, 0)) rx.lastIndex = 0;
+        var result = _regexpExecAbstract(rx, S);
+        if (!_sameValue(rx.lastIndex, previousLastIndex)) rx.lastIndex = previousLastIndex;
+        return result === null ? -1 : result.index;
+      }
+    ];
+  });
 
   // 21.2.5.3 get RegExp.prototype.flags()
   if (_descriptors && /./g.flags != 'g') _objectDp.f(RegExp.prototype, 'flags', {
@@ -1589,6 +1813,16 @@ typeof navigator === "object" && (function (global, factory) {
     }
   }
 
+  // 19.1.3.6 Object.prototype.toString()
+
+  var test = {};
+  test[_wks('toStringTag')] = 'z';
+  if (test + '' != '[object z]') {
+    _redefine(Object.prototype, 'toString', function toString() {
+      return '[object ' + _classof(this) + ']';
+    }, true);
+  }
+
   // true  -> String#at
   // false -> String#codePointAt
   var _stringAt = function (TO_STRING) {
@@ -1695,6 +1929,7 @@ typeof navigator === "object" && (function (global, factory) {
 
 
 
+
   var $assign = Object.assign;
 
   // should work with symbols and should have deterministic property order (V8 bug)
@@ -1719,7 +1954,10 @@ typeof navigator === "object" && (function (global, factory) {
       var length = keys.length;
       var j = 0;
       var key;
-      while (length > j) if (isEnum.call(S, key = keys[j++])) T[key] = S[key];
+      while (length > j) {
+        key = keys[j++];
+        if (!_descriptors || isEnum.call(S, key)) T[key] = S[key];
+      }
     } return T;
   } : $assign;
 
@@ -1918,6 +2156,7 @@ typeof navigator === "object" && (function (global, factory) {
   };
 
   var es6_weakMap = createCommonjsModule(function (module) {
+
   var each = _arrayMethods(0);
 
 
@@ -1925,12 +2164,12 @@ typeof navigator === "object" && (function (global, factory) {
 
 
 
-
+  var NATIVE_WEAK_MAP = _validateCollection;
+  var IS_IE11 = !_global.ActiveXObject && 'ActiveXObject' in _global;
   var WEAK_MAP = 'WeakMap';
   var getWeak = _meta.getWeak;
   var isExtensible = Object.isExtensible;
   var uncaughtFrozenStore = _collectionWeak.ufstore;
-  var tmp = {};
   var InternalMap;
 
   var wrapper = function (get) {
@@ -1958,7 +2197,7 @@ typeof navigator === "object" && (function (global, factory) {
   var $WeakMap = module.exports = _collection(WEAK_MAP, wrapper, methods, _collectionWeak, true, true);
 
   // IE11 WeakMap frozen keys fix
-  if (_fails(function () { return new $WeakMap().set((Object.freeze || Object)(tmp), 7).get(tmp) != 7; })) {
+  if (NATIVE_WEAK_MAP && IS_IE11) {
     InternalMap = _collectionWeak.getConstructor(wrapper, WEAK_MAP);
     _objectAssign(InternalMap.prototype, methods);
     _meta.NEED = true;
@@ -2016,19 +2255,15 @@ typeof navigator === "object" && (function (global, factory) {
   }
 
   function _slicedToArray(arr, i) {
-    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest();
+    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
   }
 
   function _toConsumableArray(arr) {
-    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _nonIterableSpread();
+    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
   }
 
   function _arrayWithoutHoles(arr) {
-    if (Array.isArray(arr)) {
-      for (var i = 0, arr2 = new Array(arr.length); i < arr.length; i++) arr2[i] = arr[i];
-
-      return arr2;
-    }
+    if (Array.isArray(arr)) return _arrayLikeToArray(arr);
   }
 
   function _arrayWithHoles(arr) {
@@ -2036,10 +2271,11 @@ typeof navigator === "object" && (function (global, factory) {
   }
 
   function _iterableToArray(iter) {
-    if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter);
+    if (typeof Symbol !== "undefined" && Symbol.iterator in Object(iter)) return Array.from(iter);
   }
 
   function _iterableToArrayLimit(arr, i) {
+    if (typeof Symbol === "undefined" || !(Symbol.iterator in Object(arr))) return;
     var _arr = [];
     var _n = true;
     var _d = false;
@@ -2065,12 +2301,86 @@ typeof navigator === "object" && (function (global, factory) {
     return _arr;
   }
 
+  function _unsupportedIterableToArray(o, minLen) {
+    if (!o) return;
+    if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+    var n = Object.prototype.toString.call(o).slice(8, -1);
+    if (n === "Object" && o.constructor) n = o.constructor.name;
+    if (n === "Map" || n === "Set") return Array.from(o);
+    if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+  }
+
+  function _arrayLikeToArray(arr, len) {
+    if (len == null || len > arr.length) len = arr.length;
+
+    for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+
+    return arr2;
+  }
+
   function _nonIterableSpread() {
-    throw new TypeError("Invalid attempt to spread non-iterable instance");
+    throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
   }
 
   function _nonIterableRest() {
-    throw new TypeError("Invalid attempt to destructure non-iterable instance");
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+  }
+
+  function _createForOfIteratorHelper(o, allowArrayLike) {
+    var it;
+
+    if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
+      if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+        if (it) o = it;
+        var i = 0;
+
+        var F = function () {};
+
+        return {
+          s: F,
+          n: function () {
+            if (i >= o.length) return {
+              done: true
+            };
+            return {
+              done: false,
+              value: o[i++]
+            };
+          },
+          e: function (e) {
+            throw e;
+          },
+          f: F
+        };
+      }
+
+      throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+
+    var normalCompletion = true,
+        didErr = false,
+        err;
+    return {
+      s: function () {
+        it = o[Symbol.iterator]();
+      },
+      n: function () {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      },
+      e: function (e) {
+        didErr = true;
+        err = e;
+      },
+      f: function () {
+        try {
+          if (!normalCompletion && it.return != null) it.return();
+        } finally {
+          if (didErr) throw err;
+        }
+      }
+    };
   }
 
   // 19.1.3.1 Object.assign(target, source)
@@ -2078,14 +2388,37 @@ typeof navigator === "object" && (function (global, factory) {
 
   _export(_export.S + _export.F, 'Object', { assign: _objectAssign });
 
+  // 7.3.20 SpeciesConstructor(O, defaultConstructor)
+
+
+  var SPECIES$2 = _wks('species');
+  var _speciesConstructor = function (O, D) {
+    var C = _anObject(O).constructor;
+    var S;
+    return C === undefined || (S = _anObject(C)[SPECIES$2]) == undefined ? D : _aFunction(S);
+  };
+
+  var at = _stringAt(true);
+
+   // `AdvanceStringIndex` abstract operation
+  // https://tc39.github.io/ecma262/#sec-advancestringindex
+  var _advanceStringIndex = function (S, index, unicode) {
+    return index + (unicode ? at(S, index).length : 1);
+  };
+
+  var $min = Math.min;
+  var $push = [].push;
+  var $SPLIT = 'split';
+  var LENGTH = 'length';
+  var LAST_INDEX$1 = 'lastIndex';
+  var MAX_UINT32 = 0xffffffff;
+
+  // babel-minify transpiles RegExp('x', 'y') -> /x/y and it causes SyntaxError
+  var SUPPORTS_Y = !_fails(function () { });
+
   // @@split logic
-  _fixReWks('split', 2, function (defined, SPLIT, $split) {
-    var isRegExp = _isRegexp;
-    var _split = $split;
-    var $push = [].push;
-    var $SPLIT = 'split';
-    var LENGTH = 'length';
-    var LAST_INDEX = 'lastIndex';
+  _fixReWks('split', 2, function (defined, SPLIT, $split, maybeCallNative) {
+    var internalSplit;
     if (
       'abbc'[$SPLIT](/(b)*/)[1] == 'c' ||
       'test'[$SPLIT](/(?:)/, -1)[LENGTH] != 4 ||
@@ -2094,41 +2427,32 @@ typeof navigator === "object" && (function (global, factory) {
       '.'[$SPLIT](/()()/)[LENGTH] > 1 ||
       ''[$SPLIT](/.?/)[LENGTH]
     ) {
-      var NPCG = /()??/.exec('')[1] === undefined; // nonparticipating capturing group
       // based on es5-shim implementation, need to rework it
-      $split = function (separator, limit) {
+      internalSplit = function (separator, limit) {
         var string = String(this);
         if (separator === undefined && limit === 0) return [];
         // If `separator` is not a regex, use native split
-        if (!isRegExp(separator)) return _split.call(string, separator, limit);
+        if (!_isRegexp(separator)) return $split.call(string, separator, limit);
         var output = [];
         var flags = (separator.ignoreCase ? 'i' : '') +
                     (separator.multiline ? 'm' : '') +
                     (separator.unicode ? 'u' : '') +
                     (separator.sticky ? 'y' : '');
         var lastLastIndex = 0;
-        var splitLimit = limit === undefined ? 4294967295 : limit >>> 0;
+        var splitLimit = limit === undefined ? MAX_UINT32 : limit >>> 0;
         // Make `global` and avoid `lastIndex` issues by working with a copy
         var separatorCopy = new RegExp(separator.source, flags + 'g');
-        var separator2, match, lastIndex, lastLength, i;
-        // Doesn't need flags gy, but they don't hurt
-        if (!NPCG) separator2 = new RegExp('^' + separatorCopy.source + '$(?!\\s)', flags);
-        while (match = separatorCopy.exec(string)) {
-          // `separatorCopy.lastIndex` is not reliable cross-browser
-          lastIndex = match.index + match[0][LENGTH];
+        var match, lastIndex, lastLength;
+        while (match = _regexpExec.call(separatorCopy, string)) {
+          lastIndex = separatorCopy[LAST_INDEX$1];
           if (lastIndex > lastLastIndex) {
             output.push(string.slice(lastLastIndex, match.index));
-            // Fix browsers whose `exec` methods don't consistently return `undefined` for NPCG
-            // eslint-disable-next-line no-loop-func
-            if (!NPCG && match[LENGTH] > 1) match[0].replace(separator2, function () {
-              for (i = 1; i < arguments[LENGTH] - 2; i++) if (arguments[i] === undefined) match[i] = undefined;
-            });
             if (match[LENGTH] > 1 && match.index < string[LENGTH]) $push.apply(output, match.slice(1));
             lastLength = match[0][LENGTH];
             lastLastIndex = lastIndex;
             if (output[LENGTH] >= splitLimit) break;
           }
-          if (separatorCopy[LAST_INDEX] === match.index) separatorCopy[LAST_INDEX]++; // Avoid an infinite loop
+          if (separatorCopy[LAST_INDEX$1] === match.index) separatorCopy[LAST_INDEX$1]++; // Avoid an infinite loop
         }
         if (lastLastIndex === string[LENGTH]) {
           if (lastLength || !separatorCopy.test('')) output.push('');
@@ -2137,16 +2461,74 @@ typeof navigator === "object" && (function (global, factory) {
       };
     // Chakra, V8
     } else if ('0'[$SPLIT](undefined, 0)[LENGTH]) {
-      $split = function (separator, limit) {
-        return separator === undefined && limit === 0 ? [] : _split.call(this, separator, limit);
+      internalSplit = function (separator, limit) {
+        return separator === undefined && limit === 0 ? [] : $split.call(this, separator, limit);
       };
+    } else {
+      internalSplit = $split;
     }
-    // 21.1.3.17 String.prototype.split(separator, limit)
-    return [function split(separator, limit) {
-      var O = defined(this);
-      var fn = separator == undefined ? undefined : separator[SPLIT];
-      return fn !== undefined ? fn.call(separator, O, limit) : $split.call(String(O), separator, limit);
-    }, $split];
+
+    return [
+      // `String.prototype.split` method
+      // https://tc39.github.io/ecma262/#sec-string.prototype.split
+      function split(separator, limit) {
+        var O = defined(this);
+        var splitter = separator == undefined ? undefined : separator[SPLIT];
+        return splitter !== undefined
+          ? splitter.call(separator, O, limit)
+          : internalSplit.call(String(O), separator, limit);
+      },
+      // `RegExp.prototype[@@split]` method
+      // https://tc39.github.io/ecma262/#sec-regexp.prototype-@@split
+      //
+      // NOTE: This cannot be properly polyfilled in engines that don't support
+      // the 'y' flag.
+      function (regexp, limit) {
+        var res = maybeCallNative(internalSplit, regexp, this, limit, internalSplit !== $split);
+        if (res.done) return res.value;
+
+        var rx = _anObject(regexp);
+        var S = String(this);
+        var C = _speciesConstructor(rx, RegExp);
+
+        var unicodeMatching = rx.unicode;
+        var flags = (rx.ignoreCase ? 'i' : '') +
+                    (rx.multiline ? 'm' : '') +
+                    (rx.unicode ? 'u' : '') +
+                    (SUPPORTS_Y ? 'y' : 'g');
+
+        // ^(? + rx + ) is needed, in combination with some S slicing, to
+        // simulate the 'y' flag.
+        var splitter = new C(SUPPORTS_Y ? rx : '^(?:' + rx.source + ')', flags);
+        var lim = limit === undefined ? MAX_UINT32 : limit >>> 0;
+        if (lim === 0) return [];
+        if (S.length === 0) return _regexpExecAbstract(splitter, S) === null ? [S] : [];
+        var p = 0;
+        var q = 0;
+        var A = [];
+        while (q < S.length) {
+          splitter.lastIndex = SUPPORTS_Y ? q : 0;
+          var z = _regexpExecAbstract(splitter, SUPPORTS_Y ? S : S.slice(q));
+          var e;
+          if (
+            z === null ||
+            (e = $min(_toLength(splitter.lastIndex + (SUPPORTS_Y ? 0 : q)), S.length)) === p
+          ) {
+            q = _advanceStringIndex(S, q, unicodeMatching);
+          } else {
+            A.push(S.slice(p, q));
+            if (A.length === lim) return A;
+            for (var i = 1; i <= z.length - 1; i++) {
+              A.push(z[i]);
+              if (A.length === lim) return A;
+            }
+            q = p = e;
+          }
+        }
+        A.push(S.slice(p));
+        return A;
+      }
+    ];
   });
 
   var isEnum = _objectPie.f;
@@ -2158,9 +2540,13 @@ typeof navigator === "object" && (function (global, factory) {
       var i = 0;
       var result = [];
       var key;
-      while (length > i) if (isEnum.call(O, key = keys[i++])) {
-        result.push(isEntries ? [key, O[key]] : O[key]);
-      } return result;
+      while (length > i) {
+        key = keys[i++];
+        if (!_descriptors || isEnum.call(O, key)) {
+          result.push(isEntries ? [key, O[key]] : O[key]);
+        }
+      }
+      return result;
     };
   };
 
@@ -2184,27 +2570,116 @@ typeof navigator === "object" && (function (global, factory) {
     }
   });
 
-  // @@replace logic
-  _fixReWks('replace', 2, function (defined, REPLACE, $replace) {
-    // 21.1.3.14 String.prototype.replace(searchValue, replaceValue)
-    return [function replace(searchValue, replaceValue) {
-      var O = defined(this);
-      var fn = searchValue == undefined ? undefined : searchValue[REPLACE];
-      return fn !== undefined
-        ? fn.call(searchValue, O, replaceValue)
-        : $replace.call(String(O), searchValue, replaceValue);
-    }, $replace];
-  });
+  var max$1 = Math.max;
+  var min$2 = Math.min;
+  var floor$1 = Math.floor;
+  var SUBSTITUTION_SYMBOLS = /\$([$&`']|\d\d?|<[^>]*>)/g;
+  var SUBSTITUTION_SYMBOLS_NO_NAMED = /\$([$&`']|\d\d?)/g;
 
-  // 7.3.20 SpeciesConstructor(O, defaultConstructor)
-
-
-  var SPECIES$1 = _wks('species');
-  var _speciesConstructor = function (O, D) {
-    var C = _anObject(O).constructor;
-    var S;
-    return C === undefined || (S = _anObject(C)[SPECIES$1]) == undefined ? D : _aFunction(S);
+  var maybeToString = function (it) {
+    return it === undefined ? it : String(it);
   };
+
+  // @@replace logic
+  _fixReWks('replace', 2, function (defined, REPLACE, $replace, maybeCallNative) {
+    return [
+      // `String.prototype.replace` method
+      // https://tc39.github.io/ecma262/#sec-string.prototype.replace
+      function replace(searchValue, replaceValue) {
+        var O = defined(this);
+        var fn = searchValue == undefined ? undefined : searchValue[REPLACE];
+        return fn !== undefined
+          ? fn.call(searchValue, O, replaceValue)
+          : $replace.call(String(O), searchValue, replaceValue);
+      },
+      // `RegExp.prototype[@@replace]` method
+      // https://tc39.github.io/ecma262/#sec-regexp.prototype-@@replace
+      function (regexp, replaceValue) {
+        var res = maybeCallNative($replace, regexp, this, replaceValue);
+        if (res.done) return res.value;
+
+        var rx = _anObject(regexp);
+        var S = String(this);
+        var functionalReplace = typeof replaceValue === 'function';
+        if (!functionalReplace) replaceValue = String(replaceValue);
+        var global = rx.global;
+        if (global) {
+          var fullUnicode = rx.unicode;
+          rx.lastIndex = 0;
+        }
+        var results = [];
+        while (true) {
+          var result = _regexpExecAbstract(rx, S);
+          if (result === null) break;
+          results.push(result);
+          if (!global) break;
+          var matchStr = String(result[0]);
+          if (matchStr === '') rx.lastIndex = _advanceStringIndex(S, _toLength(rx.lastIndex), fullUnicode);
+        }
+        var accumulatedResult = '';
+        var nextSourcePosition = 0;
+        for (var i = 0; i < results.length; i++) {
+          result = results[i];
+          var matched = String(result[0]);
+          var position = max$1(min$2(_toInteger(result.index), S.length), 0);
+          var captures = [];
+          // NOTE: This is equivalent to
+          //   captures = result.slice(1).map(maybeToString)
+          // but for some reason `nativeSlice.call(result, 1, result.length)` (called in
+          // the slice polyfill when slicing native arrays) "doesn't work" in safari 9 and
+          // causes a crash (https://pastebin.com/N21QzeQA) when trying to debug it.
+          for (var j = 1; j < result.length; j++) captures.push(maybeToString(result[j]));
+          var namedCaptures = result.groups;
+          if (functionalReplace) {
+            var replacerArgs = [matched].concat(captures, position, S);
+            if (namedCaptures !== undefined) replacerArgs.push(namedCaptures);
+            var replacement = String(replaceValue.apply(undefined, replacerArgs));
+          } else {
+            replacement = getSubstitution(matched, S, position, captures, namedCaptures, replaceValue);
+          }
+          if (position >= nextSourcePosition) {
+            accumulatedResult += S.slice(nextSourcePosition, position) + replacement;
+            nextSourcePosition = position + matched.length;
+          }
+        }
+        return accumulatedResult + S.slice(nextSourcePosition);
+      }
+    ];
+
+      // https://tc39.github.io/ecma262/#sec-getsubstitution
+    function getSubstitution(matched, str, position, captures, namedCaptures, replacement) {
+      var tailPos = position + matched.length;
+      var m = captures.length;
+      var symbols = SUBSTITUTION_SYMBOLS_NO_NAMED;
+      if (namedCaptures !== undefined) {
+        namedCaptures = _toObject(namedCaptures);
+        symbols = SUBSTITUTION_SYMBOLS;
+      }
+      return $replace.call(replacement, symbols, function (match, ch) {
+        var capture;
+        switch (ch.charAt(0)) {
+          case '$': return '$';
+          case '&': return matched;
+          case '`': return str.slice(0, position);
+          case "'": return str.slice(tailPos);
+          case '<':
+            capture = namedCaptures[ch.slice(1, -1)];
+            break;
+          default: // \d\d?
+            var n = +ch;
+            if (n === 0) return match;
+            if (n > m) {
+              var f = floor$1(n / 10);
+              if (f === 0) return match;
+              if (f <= m) return captures[f - 1] === undefined ? ch.charAt(1) : captures[f - 1] + ch.charAt(1);
+              return match;
+            }
+            capture = captures[n - 1];
+        }
+        return capture === undefined ? '' : capture;
+      });
+    }
+  });
 
   // fast apply, http://jsperf.lnkit.com/fast-apply/5
   var _invoke = function (fn, args, that) {
@@ -2415,11 +2890,11 @@ typeof navigator === "object" && (function (global, factory) {
     return promiseCapability.promise;
   };
 
-  var SPECIES$2 = _wks('species');
+  var SPECIES$3 = _wks('species');
 
   var _setSpecies = function (KEY) {
     var C = _global[KEY];
-    if (_descriptors && C && !C[SPECIES$2]) _objectDp.f(C, SPECIES$2, {
+    if (_descriptors && C && !C[SPECIES$3]) _objectDp.f(C, SPECIES$3, {
       configurable: true,
       get: function () { return this; }
     });
@@ -3724,9 +4199,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   };
 
-  var Storage =
-  /*#__PURE__*/
-  function () {
+  var Storage = /*#__PURE__*/function () {
     function Storage(player) {
       _classCallCheck(this, Storage);
 
@@ -6169,9 +6642,7 @@ typeof navigator === "object" && (function (global, factory) {
   // ==========================================================================
   var noop = function noop() {};
 
-  var Console =
-  /*#__PURE__*/
-  function () {
+  var Console = /*#__PURE__*/function () {
     function Console() {
       var enabled = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
 
@@ -6281,9 +6752,7 @@ typeof navigator === "object" && (function (global, factory) {
     onChange.call(this);
   }
 
-  var Fullscreen =
-  /*#__PURE__*/
-  function () {
+  var Fullscreen = /*#__PURE__*/function () {
     function Fullscreen(player) {
       var _this2 = this;
 
@@ -6692,9 +7161,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   };
 
-  var Listeners =
-  /*#__PURE__*/
-  function () {
+  var Listeners = /*#__PURE__*/function () {
     function Listeners(player) {
       _classCallCheck(this, Listeners);
 
@@ -7399,13 +7866,37 @@ typeof navigator === "object" && (function (global, factory) {
   });
 
   // @@match logic
-  _fixReWks('match', 1, function (defined, MATCH, $match) {
-    // 21.1.3.11 String.prototype.match(regexp)
-    return [function match(regexp) {
-      var O = defined(this);
-      var fn = regexp == undefined ? undefined : regexp[MATCH];
-      return fn !== undefined ? fn.call(regexp, O) : new RegExp(regexp)[MATCH](String(O));
-    }, $match];
+  _fixReWks('match', 1, function (defined, MATCH, $match, maybeCallNative) {
+    return [
+      // `String.prototype.match` method
+      // https://tc39.github.io/ecma262/#sec-string.prototype.match
+      function match(regexp) {
+        var O = defined(this);
+        var fn = regexp == undefined ? undefined : regexp[MATCH];
+        return fn !== undefined ? fn.call(regexp, O) : new RegExp(regexp)[MATCH](String(O));
+      },
+      // `RegExp.prototype[@@match]` method
+      // https://tc39.github.io/ecma262/#sec-regexp.prototype-@@match
+      function (regexp) {
+        var res = maybeCallNative($match, regexp, this);
+        if (res.done) return res.value;
+        var rx = _anObject(regexp);
+        var S = String(this);
+        if (!rx.global) return _regexpExecAbstract(rx, S);
+        var fullUnicode = rx.unicode;
+        rx.lastIndex = 0;
+        var A = [];
+        var n = 0;
+        var result;
+        while ((result = _regexpExecAbstract(rx, S)) !== null) {
+          var matchStr = String(result[0]);
+          A[n] = matchStr;
+          if (matchStr === '') rx.lastIndex = _advanceStringIndex(S, _toLength(rx.lastIndex), fullUnicode);
+          n++;
+        }
+        return n === 0 ? null : A;
+      }
+    ];
   });
 
   var loadjs_umd = createCommonjsModule(function (module, exports) {
@@ -7519,18 +8010,26 @@ typeof navigator === "object" && (function (global, factory) {
         maxTries = (args.numRetries || 0) + 1,
         beforeCallbackFn = args.before || devnull,
         pathStripped = path.replace(/^(css|img)!/, ''),
-        isCss,
+        isLegacyIECss,
         e;
 
     numTries = numTries || 0;
 
     if (/(^css!|\.css$)/.test(path)) {
-      isCss = true;
-
       // css
       e = doc.createElement('link');
       e.rel = 'stylesheet';
-      e.href = pathStripped; //.replace(/^css!/, '');  // remove "css!" prefix
+      e.href = pathStripped;
+
+      // tag IE9+
+      isLegacyIECss = 'hideFocus' in e;
+
+      // use preload in IE Edge (to detect load errors)
+      if (isLegacyIECss && e.relList) {
+        isLegacyIECss = 0;
+        e.rel = 'preload';
+        e.as = 'style';
+      }
     } else if (/(^img!|\.(png|gif|jpg|svg)$)/.test(path)) {
       // image
       e = doc.createElement('img');
@@ -7545,15 +8044,15 @@ typeof navigator === "object" && (function (global, factory) {
     e.onload = e.onerror = e.onbeforeload = function (ev) {
       var result = ev.type[0];
 
-      // Note: The following code isolates IE using `hideFocus` and treats empty
-      // stylesheets as failures to get around lack of onerror support
-      if (isCss && 'hideFocus' in e) {
+      // treat empty stylesheets as failures to get around lack of onerror
+      // support in IE9-11
+      if (isLegacyIECss) {
         try {
           if (!e.sheet.cssText.length) result = 'e';
         } catch (x) {
           // sheets objects created from load errors don't allow access to
-          // `cssText`
-          result = 'e';
+          // `cssText` (unless error is Code:18 SecurityError)
+          if (x.code != 18) result = 'e';
         }
       }
 
@@ -7566,8 +8065,11 @@ typeof navigator === "object" && (function (global, factory) {
         if (numTries < maxTries) {
           return loadFile(path, callbackFn, args, numTries);
         }
+      } else if (e.rel == 'preload' && e.as == 'style') {
+        // activate preloaded stylesheets
+        return e.rel = 'stylesheet'; // jshint ignore:line
       }
-
+      
       // execute callback
       callbackFn(path, result, ev.defaultPrevented);
     };
@@ -7616,9 +8118,11 @@ typeof navigator === "object" && (function (global, factory) {
   /**
    * Initiate script load and register bundle.
    * @param {(string|string[])} paths - The file paths
-   * @param {(string|Function)} [arg1] - The bundleId or success callback
-   * @param {Function} [arg2] - The success or error callback
-   * @param {Function} [arg3] - The error callback
+   * @param {(string|Function|Object)} [arg1] - The (1) bundleId or (2) success
+   *   callback or (3) object literal with success/error arguments, numRetries,
+   *   etc.
+   * @param {(Function|Object)} [arg2] - The (1) success callback or (2) object
+   *   literal with success/error arguments, numRetries, etc.
    */
   function loadjs(paths, arg1, arg2) {
     var bundleId,
@@ -7639,14 +8143,23 @@ typeof navigator === "object" && (function (global, factory) {
       }
     }
 
-    // load scripts
-    loadFiles(paths, function (pathsNotFound) {
-      // execute callbacks
-      executeCallbacks(args, pathsNotFound);
+    function loadFn(resolve, reject) {
+      loadFiles(paths, function (pathsNotFound) {
+        // execute callbacks
+        executeCallbacks(args, pathsNotFound);
+        
+        // resolve Promise
+        if (resolve) {
+          executeCallbacks({success: resolve, error: reject}, pathsNotFound);
+        }
 
-      // publish bundle load event
-      publish(bundleId, pathsNotFound);
-    }, args);
+        // publish bundle load event
+        publish(bundleId, pathsNotFound);
+      }, args);
+    }
+    
+    if (args.returnPromise) return new Promise(loadFn);
+    else loadFn();
   }
 
 
@@ -8525,9 +9038,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   };
 
-  var Ads =
-  /*#__PURE__*/
-  function () {
+  var Ads = /*#__PURE__*/function () {
     /**
      * Ads constructor.
      * @param {object} player
@@ -9145,294 +9656,6 @@ typeof navigator === "object" && (function (global, factory) {
   });
   _addToUnscopables(KEY$1);
 
-  var f$6 = _wks;
-
-  var _wksExt = {
-  	f: f$6
-  };
-
-  var defineProperty = _objectDp.f;
-  var _wksDefine = function (name) {
-    var $Symbol = _core.Symbol || (_core.Symbol = _global.Symbol || {});
-    if (name.charAt(0) != '_' && !(name in $Symbol)) defineProperty($Symbol, name, { value: _wksExt.f(name) });
-  };
-
-  _wksDefine('asyncIterator');
-
-  // all enumerable object keys, includes symbols
-
-
-
-  var _enumKeys = function (it) {
-    var result = _objectKeys(it);
-    var getSymbols = _objectGops.f;
-    if (getSymbols) {
-      var symbols = getSymbols(it);
-      var isEnum = _objectPie.f;
-      var i = 0;
-      var key;
-      while (symbols.length > i) if (isEnum.call(it, key = symbols[i++])) result.push(key);
-    } return result;
-  };
-
-  // fallback for IE11 buggy Object.getOwnPropertyNames with iframe and window
-
-  var gOPN$2 = _objectGopn.f;
-  var toString$1 = {}.toString;
-
-  var windowNames = typeof window == 'object' && window && Object.getOwnPropertyNames
-    ? Object.getOwnPropertyNames(window) : [];
-
-  var getWindowNames = function (it) {
-    try {
-      return gOPN$2(it);
-    } catch (e) {
-      return windowNames.slice();
-    }
-  };
-
-  var f$7 = function getOwnPropertyNames(it) {
-    return windowNames && toString$1.call(it) == '[object Window]' ? getWindowNames(it) : gOPN$2(_toIobject(it));
-  };
-
-  var _objectGopnExt = {
-  	f: f$7
-  };
-
-  // ECMAScript 6 symbols shim
-
-
-
-
-
-  var META = _meta.KEY;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  var gOPD$2 = _objectGopd.f;
-  var dP$4 = _objectDp.f;
-  var gOPN$3 = _objectGopnExt.f;
-  var $Symbol = _global.Symbol;
-  var $JSON = _global.JSON;
-  var _stringify = $JSON && $JSON.stringify;
-  var PROTOTYPE$2 = 'prototype';
-  var HIDDEN = _wks('_hidden');
-  var TO_PRIMITIVE = _wks('toPrimitive');
-  var isEnum$1 = {}.propertyIsEnumerable;
-  var SymbolRegistry = _shared('symbol-registry');
-  var AllSymbols = _shared('symbols');
-  var OPSymbols = _shared('op-symbols');
-  var ObjectProto$1 = Object[PROTOTYPE$2];
-  var USE_NATIVE$1 = typeof $Symbol == 'function';
-  var QObject = _global.QObject;
-  // Don't use setters in Qt Script, https://github.com/zloirock/core-js/issues/173
-  var setter = !QObject || !QObject[PROTOTYPE$2] || !QObject[PROTOTYPE$2].findChild;
-
-  // fallback for old Android, https://code.google.com/p/v8/issues/detail?id=687
-  var setSymbolDesc = _descriptors && _fails(function () {
-    return _objectCreate(dP$4({}, 'a', {
-      get: function () { return dP$4(this, 'a', { value: 7 }).a; }
-    })).a != 7;
-  }) ? function (it, key, D) {
-    var protoDesc = gOPD$2(ObjectProto$1, key);
-    if (protoDesc) delete ObjectProto$1[key];
-    dP$4(it, key, D);
-    if (protoDesc && it !== ObjectProto$1) dP$4(ObjectProto$1, key, protoDesc);
-  } : dP$4;
-
-  var wrap$1 = function (tag) {
-    var sym = AllSymbols[tag] = _objectCreate($Symbol[PROTOTYPE$2]);
-    sym._k = tag;
-    return sym;
-  };
-
-  var isSymbol = USE_NATIVE$1 && typeof $Symbol.iterator == 'symbol' ? function (it) {
-    return typeof it == 'symbol';
-  } : function (it) {
-    return it instanceof $Symbol;
-  };
-
-  var $defineProperty = function defineProperty(it, key, D) {
-    if (it === ObjectProto$1) $defineProperty(OPSymbols, key, D);
-    _anObject(it);
-    key = _toPrimitive(key, true);
-    _anObject(D);
-    if (_has(AllSymbols, key)) {
-      if (!D.enumerable) {
-        if (!_has(it, HIDDEN)) dP$4(it, HIDDEN, _propertyDesc(1, {}));
-        it[HIDDEN][key] = true;
-      } else {
-        if (_has(it, HIDDEN) && it[HIDDEN][key]) it[HIDDEN][key] = false;
-        D = _objectCreate(D, { enumerable: _propertyDesc(0, false) });
-      } return setSymbolDesc(it, key, D);
-    } return dP$4(it, key, D);
-  };
-  var $defineProperties = function defineProperties(it, P) {
-    _anObject(it);
-    var keys = _enumKeys(P = _toIobject(P));
-    var i = 0;
-    var l = keys.length;
-    var key;
-    while (l > i) $defineProperty(it, key = keys[i++], P[key]);
-    return it;
-  };
-  var $create = function create(it, P) {
-    return P === undefined ? _objectCreate(it) : $defineProperties(_objectCreate(it), P);
-  };
-  var $propertyIsEnumerable = function propertyIsEnumerable(key) {
-    var E = isEnum$1.call(this, key = _toPrimitive(key, true));
-    if (this === ObjectProto$1 && _has(AllSymbols, key) && !_has(OPSymbols, key)) return false;
-    return E || !_has(this, key) || !_has(AllSymbols, key) || _has(this, HIDDEN) && this[HIDDEN][key] ? E : true;
-  };
-  var $getOwnPropertyDescriptor = function getOwnPropertyDescriptor(it, key) {
-    it = _toIobject(it);
-    key = _toPrimitive(key, true);
-    if (it === ObjectProto$1 && _has(AllSymbols, key) && !_has(OPSymbols, key)) return;
-    var D = gOPD$2(it, key);
-    if (D && _has(AllSymbols, key) && !(_has(it, HIDDEN) && it[HIDDEN][key])) D.enumerable = true;
-    return D;
-  };
-  var $getOwnPropertyNames = function getOwnPropertyNames(it) {
-    var names = gOPN$3(_toIobject(it));
-    var result = [];
-    var i = 0;
-    var key;
-    while (names.length > i) {
-      if (!_has(AllSymbols, key = names[i++]) && key != HIDDEN && key != META) result.push(key);
-    } return result;
-  };
-  var $getOwnPropertySymbols = function getOwnPropertySymbols(it) {
-    var IS_OP = it === ObjectProto$1;
-    var names = gOPN$3(IS_OP ? OPSymbols : _toIobject(it));
-    var result = [];
-    var i = 0;
-    var key;
-    while (names.length > i) {
-      if (_has(AllSymbols, key = names[i++]) && (IS_OP ? _has(ObjectProto$1, key) : true)) result.push(AllSymbols[key]);
-    } return result;
-  };
-
-  // 19.4.1.1 Symbol([description])
-  if (!USE_NATIVE$1) {
-    $Symbol = function Symbol() {
-      if (this instanceof $Symbol) throw TypeError('Symbol is not a constructor!');
-      var tag = _uid(arguments.length > 0 ? arguments[0] : undefined);
-      var $set = function (value) {
-        if (this === ObjectProto$1) $set.call(OPSymbols, value);
-        if (_has(this, HIDDEN) && _has(this[HIDDEN], tag)) this[HIDDEN][tag] = false;
-        setSymbolDesc(this, tag, _propertyDesc(1, value));
-      };
-      if (_descriptors && setter) setSymbolDesc(ObjectProto$1, tag, { configurable: true, set: $set });
-      return wrap$1(tag);
-    };
-    _redefine($Symbol[PROTOTYPE$2], 'toString', function toString() {
-      return this._k;
-    });
-
-    _objectGopd.f = $getOwnPropertyDescriptor;
-    _objectDp.f = $defineProperty;
-    _objectGopn.f = _objectGopnExt.f = $getOwnPropertyNames;
-    _objectPie.f = $propertyIsEnumerable;
-    _objectGops.f = $getOwnPropertySymbols;
-
-    if (_descriptors && !_library) {
-      _redefine(ObjectProto$1, 'propertyIsEnumerable', $propertyIsEnumerable, true);
-    }
-
-    _wksExt.f = function (name) {
-      return wrap$1(_wks(name));
-    };
-  }
-
-  _export(_export.G + _export.W + _export.F * !USE_NATIVE$1, { Symbol: $Symbol });
-
-  for (var es6Symbols = (
-    // 19.4.2.2, 19.4.2.3, 19.4.2.4, 19.4.2.6, 19.4.2.8, 19.4.2.9, 19.4.2.10, 19.4.2.11, 19.4.2.12, 19.4.2.13, 19.4.2.14
-    'hasInstance,isConcatSpreadable,iterator,match,replace,search,species,split,toPrimitive,toStringTag,unscopables'
-  ).split(','), j$1 = 0; es6Symbols.length > j$1;)_wks(es6Symbols[j$1++]);
-
-  for (var wellKnownSymbols = _objectKeys(_wks.store), k = 0; wellKnownSymbols.length > k;) _wksDefine(wellKnownSymbols[k++]);
-
-  _export(_export.S + _export.F * !USE_NATIVE$1, 'Symbol', {
-    // 19.4.2.1 Symbol.for(key)
-    'for': function (key) {
-      return _has(SymbolRegistry, key += '')
-        ? SymbolRegistry[key]
-        : SymbolRegistry[key] = $Symbol(key);
-    },
-    // 19.4.2.5 Symbol.keyFor(sym)
-    keyFor: function keyFor(sym) {
-      if (!isSymbol(sym)) throw TypeError(sym + ' is not a symbol!');
-      for (var key in SymbolRegistry) if (SymbolRegistry[key] === sym) return key;
-    },
-    useSetter: function () { setter = true; },
-    useSimple: function () { setter = false; }
-  });
-
-  _export(_export.S + _export.F * !USE_NATIVE$1, 'Object', {
-    // 19.1.2.2 Object.create(O [, Properties])
-    create: $create,
-    // 19.1.2.4 Object.defineProperty(O, P, Attributes)
-    defineProperty: $defineProperty,
-    // 19.1.2.3 Object.defineProperties(O, Properties)
-    defineProperties: $defineProperties,
-    // 19.1.2.6 Object.getOwnPropertyDescriptor(O, P)
-    getOwnPropertyDescriptor: $getOwnPropertyDescriptor,
-    // 19.1.2.7 Object.getOwnPropertyNames(O)
-    getOwnPropertyNames: $getOwnPropertyNames,
-    // 19.1.2.8 Object.getOwnPropertySymbols(O)
-    getOwnPropertySymbols: $getOwnPropertySymbols
-  });
-
-  // 24.3.2 JSON.stringify(value [, replacer [, space]])
-  $JSON && _export(_export.S + _export.F * (!USE_NATIVE$1 || _fails(function () {
-    var S = $Symbol();
-    // MS Edge converts symbol values to JSON as {}
-    // WebKit converts symbol values to JSON as null
-    // V8 throws on boxed symbols
-    return _stringify([S]) != '[null]' || _stringify({ a: S }) != '{}' || _stringify(Object(S)) != '{}';
-  })), 'JSON', {
-    stringify: function stringify(it) {
-      var args = [it];
-      var i = 1;
-      var replacer, $replacer;
-      while (arguments.length > i) args.push(arguments[i++]);
-      $replacer = replacer = args[1];
-      if (!_isObject(replacer) && it === undefined || isSymbol(it)) return; // IE8 returns string on undefined
-      if (!_isArray(replacer)) replacer = function (key, value) {
-        if (typeof $replacer == 'function') value = $replacer.call(this, key, value);
-        if (!isSymbol(value)) return value;
-      };
-      args[1] = replacer;
-      return _stringify.apply($JSON, args);
-    }
-  });
-
-  // 19.4.3.4 Symbol.prototype[@@toPrimitive](hint)
-  $Symbol[PROTOTYPE$2][TO_PRIMITIVE] || _hide($Symbol[PROTOTYPE$2], TO_PRIMITIVE, $Symbol[PROTOTYPE$2].valueOf);
-  // 19.4.3.5 Symbol.prototype[@@toStringTag]
-  _setToStringTag($Symbol, 'Symbol');
-  // 20.2.1.9 Math[@@toStringTag]
-  _setToStringTag(Math, 'Math', true);
-  // 24.3.3 JSON[@@toStringTag]
-  _setToStringTag(_global.JSON, 'JSON', true);
-
   /**
    * Preview thumbnails for seek hover and scrubbing
    * Seeking: Hover over the seek bar (desktop only): shows a small preview container above the seek bar
@@ -9444,9 +9667,7 @@ typeof navigator === "object" && (function (global, factory) {
    * - This implementation uses multiple separate img elements. Other implementations use background-image on one element. This would be nice and simple, but Firefox and Safari have flickering issues with replacing backgrounds of larger images. It seems that Youtube perhaps only avoids this because they don't have the option for high-res previews (even the fullscreen ones, when mousedown/seeking). Images appear over the top of each other, and previous ones are discarded once the new ones have been rendered
    */
 
-  var PreviewThumbnails =
-  /*#__PURE__*/
-  function () {
+  var PreviewThumbnails = /*#__PURE__*/function () {
     /**
      * PreviewThumbnails constructor.
      * @param {object} player
@@ -9500,28 +9721,18 @@ typeof navigator === "object" && (function (global, factory) {
           var urls = typeof configSrc === 'string' ? [configSrc] : configSrc;
           var promises = []; // Loop through each src url. Download and process the VTT file, storing the resulting data in this.thumbnailsDefs
 
-          var _iteratorNormalCompletion = true;
-          var _didIteratorError = false;
-          var _iteratorError = undefined;
+          var _iterator = _createForOfIteratorHelper(urls),
+              _step;
 
           try {
-            for (var _iterator = urls[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+            for (_iterator.s(); !(_step = _iterator.n()).done;) {
               var url = _step.value;
               promises.push(_this2.getThumbnailDef(url));
             }
           } catch (err) {
-            _didIteratorError = true;
-            _iteratorError = err;
+            _iterator.e(err);
           } finally {
-            try {
-              if (!_iteratorNormalCompletion && _iterator.return != null) {
-                _iterator.return();
-              }
-            } finally {
-              if (_didIteratorError) {
-                throw _iteratorError;
-              }
-            }
+            _iterator.f();
           }
 
           Promise.all(promises).then(function () {
@@ -9755,8 +9966,8 @@ typeof navigator === "object" && (function (global, factory) {
         var newImage = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : true;
 
         // Only show if the user is still hovering the same spot
-        // if (thumbFilename === this.showingThumbFilename) {
-        if (this.showingThumb && this.showingThumb === thumbNum) {
+        // if (this.showingThumb && this.showingThumb === thumbNum) {
+        if (this.showingThumb === thumbNum) {
           this.player.debug.log('Showing thumb: ' + thumbFilename + '. num: ' + thumbNum + ". xy:".concat(frame.x, ",").concat(frame.y) + '. qual: ' + qualityIndex + '. newimg: ' + newImage);
           this.setImageSizeAndOffset(previewImage, frame);
 
@@ -9768,8 +9979,8 @@ typeof navigator === "object" && (function (global, factory) {
           // Then show higher quality of the same frame
 
 
-          this.preloadNearby(thumbNum, true).then(function () {
-            return _this7.preloadNearby(thumbNum, false);
+          this.preloadNearby(thumbNum, true, qualityIndex).then(function () {
+            return _this7.preloadNearby(thumbNum, false, qualityIndex);
           }).then(function () {
             return _this7.getHigherQuality(qualityIndex, previewImage, frame, thumbFilename, thumbNum);
           }).catch(function (err) {
@@ -9788,7 +9999,7 @@ typeof navigator === "object" && (function (global, factory) {
         var allImages = Array.from(this.currentContainer.children);
 
         var _loop = function _loop() {
-          var image = allImages[_i];
+          var image = _allImages[_i];
 
           if (image.tagName === 'IMG') {
             var removeDelay = _this8.usingJpegSprites ? 500 : 1000;
@@ -9808,11 +10019,11 @@ typeof navigator === "object" && (function (global, factory) {
           }
         };
 
-        for (var _i = 0; _i < allImages.length; _i++) {
+        for (var _i = 0, _allImages = allImages; _i < _allImages.length; _i++) {
           _loop();
         }
       } // Preload images before and after the current one. Only if the user is still hovering/seeking the same frame
-      // This will only preload the lowest quality
+      // Note that this will not be effective for non-sprited images, and as such should probably be prevented. (Because without spriting, the next hovered image is rarely +1 or -1 from the current one.)
 
     }, {
       key: "preloadNearby",
@@ -9820,23 +10031,24 @@ typeof navigator === "object" && (function (global, factory) {
         var _this9 = this;
 
         var forward = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+        var qualityIndex = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
         return new Promise(function (resolve, reject) {
-          var oldThumbFilename = _this9.thumbnailsDefs[0].frames[thumbNum].text;
+          var oldThumbFilename = _this9.thumbnailsDefs[qualityIndex].frames[thumbNum].text;
 
           if (_this9.showingThumbFilename === oldThumbFilename) {
             // Find the nearest thumbs with different filenames. Sometimes it'll be the next index, but in the case of jpeg sprites, it might be 100+ away
             var thumbnailsDefsCopy;
 
             if (forward) {
-              thumbnailsDefsCopy = _this9.thumbnailsDefs[0].frames.slice(thumbNum);
+              thumbnailsDefsCopy = _this9.thumbnailsDefs[qualityIndex].frames.slice(thumbNum);
             } else {
-              thumbnailsDefsCopy = _this9.thumbnailsDefs[0].frames.slice(0, thumbNum).reverse();
+              thumbnailsDefsCopy = _this9.thumbnailsDefs[qualityIndex].frames.slice(0, thumbNum).reverse();
             }
 
             var foundOne = false;
-            var _iteratorNormalCompletion2 = true;
-            var _didIteratorError2 = false;
-            var _iteratorError2 = undefined;
+
+            var _iterator2 = _createForOfIteratorHelper(thumbnailsDefsCopy),
+                _step2;
 
             try {
               var _loop2 = function _loop2() {
@@ -9850,7 +10062,7 @@ typeof navigator === "object" && (function (global, factory) {
 
                     _this9.player.debug.log('Preloading thumb filename: ' + newThumbFilename);
 
-                    var urlPrefix = _this9.thumbnailsDefs[0].urlPrefix;
+                    var urlPrefix = _this9.thumbnailsDefs[qualityIndex].urlPrefix;
                     var thumbURL = urlPrefix + newThumbFilename;
                     _this9.numLoading += 1;
                     var previewImage = new Image();
@@ -9870,25 +10082,16 @@ typeof navigator === "object" && (function (global, factory) {
                 }
               };
 
-              for (var _iterator2 = thumbnailsDefsCopy[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+              for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
                 var _ret = _loop2();
 
                 if (_ret === "break") break;
               } // If there are none to preload then we want to resolve immediately - this includes if the next one is already preloaded
 
             } catch (err) {
-              _didIteratorError2 = true;
-              _iteratorError2 = err;
+              _iterator2.e(err);
             } finally {
-              try {
-                if (!_iteratorNormalCompletion2 && _iterator2.return != null) {
-                  _iterator2.return();
-                }
-              } finally {
-                if (_didIteratorError2) {
-                  throw _iteratorError2;
-                }
-              }
+              _iterator2.f();
             }
 
             if (!foundOne) resolve();
@@ -10012,20 +10215,20 @@ typeof navigator === "object" && (function (global, factory) {
       value: function parseVtt(vttDataString) {
         var processedList = [];
         var frames = vttDataString.split(/\r\n\r\n|\n\n|\r\r/);
-        var _iteratorNormalCompletion3 = true;
-        var _didIteratorError3 = false;
-        var _iteratorError3 = undefined;
+
+        var _iterator3 = _createForOfIteratorHelper(frames),
+            _step3;
 
         try {
-          for (var _iterator3 = frames[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+          for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
             var frame = _step3.value;
             var result = {};
-            var _iteratorNormalCompletion4 = true;
-            var _didIteratorError4 = false;
-            var _iteratorError4 = undefined;
+
+            var _iterator4 = _createForOfIteratorHelper(frame.split(/\r\n|\n|\r/)),
+                _step4;
 
             try {
-              for (var _iterator4 = frame.split(/\r\n|\n|\r/)[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+              for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
                 var line = _step4.value;
 
                 if (result.startTime == null) {
@@ -10055,18 +10258,9 @@ typeof navigator === "object" && (function (global, factory) {
                 }
               }
             } catch (err) {
-              _didIteratorError4 = true;
-              _iteratorError4 = err;
+              _iterator4.e(err);
             } finally {
-              try {
-                if (!_iteratorNormalCompletion4 && _iterator4.return != null) {
-                  _iterator4.return();
-                }
-              } finally {
-                if (_didIteratorError4) {
-                  throw _iteratorError4;
-                }
-              }
+              _iterator4.f();
             }
 
             if (result.text) {
@@ -10074,18 +10268,9 @@ typeof navigator === "object" && (function (global, factory) {
             }
           }
         } catch (err) {
-          _didIteratorError3 = true;
-          _iteratorError3 = err;
+          _iterator3.e(err);
         } finally {
-          try {
-            if (!_iteratorNormalCompletion3 && _iterator3.return != null) {
-              _iterator3.return();
-            }
-          } finally {
-            if (_didIteratorError3) {
-              throw _iteratorError3;
-            }
-          }
+          _iterator3.f();
         }
 
         return processedList;
@@ -10289,9 +10474,7 @@ typeof navigator === "object" && (function (global, factory) {
   // const globals = new WeakMap();
   // Plyr instance
 
-  var Plyr =
-  /*#__PURE__*/
-  function () {
+  var Plyr = /*#__PURE__*/function () {
     function Plyr(target, options) {
       var _this = this;
 

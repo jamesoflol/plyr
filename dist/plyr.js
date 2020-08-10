@@ -42,19 +42,15 @@ typeof navigator === "object" && (function (global, factory) {
   }
 
   function _slicedToArray(arr, i) {
-    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest();
+    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
   }
 
   function _toConsumableArray(arr) {
-    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _nonIterableSpread();
+    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
   }
 
   function _arrayWithoutHoles(arr) {
-    if (Array.isArray(arr)) {
-      for (var i = 0, arr2 = new Array(arr.length); i < arr.length; i++) arr2[i] = arr[i];
-
-      return arr2;
-    }
+    if (Array.isArray(arr)) return _arrayLikeToArray(arr);
   }
 
   function _arrayWithHoles(arr) {
@@ -62,10 +58,11 @@ typeof navigator === "object" && (function (global, factory) {
   }
 
   function _iterableToArray(iter) {
-    if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter);
+    if (typeof Symbol !== "undefined" && Symbol.iterator in Object(iter)) return Array.from(iter);
   }
 
   function _iterableToArrayLimit(arr, i) {
+    if (typeof Symbol === "undefined" || !(Symbol.iterator in Object(arr))) return;
     var _arr = [];
     var _n = true;
     var _d = false;
@@ -91,12 +88,86 @@ typeof navigator === "object" && (function (global, factory) {
     return _arr;
   }
 
+  function _unsupportedIterableToArray(o, minLen) {
+    if (!o) return;
+    if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+    var n = Object.prototype.toString.call(o).slice(8, -1);
+    if (n === "Object" && o.constructor) n = o.constructor.name;
+    if (n === "Map" || n === "Set") return Array.from(o);
+    if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+  }
+
+  function _arrayLikeToArray(arr, len) {
+    if (len == null || len > arr.length) len = arr.length;
+
+    for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+
+    return arr2;
+  }
+
   function _nonIterableSpread() {
-    throw new TypeError("Invalid attempt to spread non-iterable instance");
+    throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
   }
 
   function _nonIterableRest() {
-    throw new TypeError("Invalid attempt to destructure non-iterable instance");
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+  }
+
+  function _createForOfIteratorHelper(o, allowArrayLike) {
+    var it;
+
+    if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
+      if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+        if (it) o = it;
+        var i = 0;
+
+        var F = function () {};
+
+        return {
+          s: F,
+          n: function () {
+            if (i >= o.length) return {
+              done: true
+            };
+            return {
+              done: false,
+              value: o[i++]
+            };
+          },
+          e: function (e) {
+            throw e;
+          },
+          f: F
+        };
+      }
+
+      throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+
+    var normalCompletion = true,
+        didErr = false,
+        err;
+    return {
+      s: function () {
+        it = o[Symbol.iterator]();
+      },
+      n: function () {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      },
+      e: function (e) {
+        didErr = true;
+        err = e;
+      },
+      f: function () {
+        try {
+          if (!normalCompletion && it.return != null) it.return();
+        } finally {
+          if (didErr) throw err;
+        }
+      }
+    };
   }
 
   // ==========================================================================
@@ -1061,9 +1132,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   };
 
-  var Storage =
-  /*#__PURE__*/
-  function () {
+  var Storage = /*#__PURE__*/function () {
     function Storage(player) {
       _classCallCheck(this, Storage);
 
@@ -3506,9 +3575,7 @@ typeof navigator === "object" && (function (global, factory) {
   // ==========================================================================
   var noop = function noop() {};
 
-  var Console =
-  /*#__PURE__*/
-  function () {
+  var Console = /*#__PURE__*/function () {
     function Console() {
       var enabled = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
 
@@ -3618,9 +3685,7 @@ typeof navigator === "object" && (function (global, factory) {
     onChange.call(this);
   }
 
-  var Fullscreen =
-  /*#__PURE__*/
-  function () {
+  var Fullscreen = /*#__PURE__*/function () {
     function Fullscreen(player) {
       var _this2 = this;
 
@@ -4019,9 +4084,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   };
 
-  var Listeners =
-  /*#__PURE__*/
-  function () {
+  var Listeners = /*#__PURE__*/function () {
     function Listeners(player) {
       _classCallCheck(this, Listeners);
 
@@ -4708,7 +4771,7 @@ typeof navigator === "object" && (function (global, factory) {
     return Listeners;
   }();
 
-  var commonjsGlobal = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+  var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
   function createCommonjsModule(fn, module) {
   	return module = { exports: {} }, fn(module, module.exports), module.exports;
@@ -4825,18 +4888,26 @@ typeof navigator === "object" && (function (global, factory) {
         maxTries = (args.numRetries || 0) + 1,
         beforeCallbackFn = args.before || devnull,
         pathStripped = path.replace(/^(css|img)!/, ''),
-        isCss,
+        isLegacyIECss,
         e;
 
     numTries = numTries || 0;
 
     if (/(^css!|\.css$)/.test(path)) {
-      isCss = true;
-
       // css
       e = doc.createElement('link');
       e.rel = 'stylesheet';
-      e.href = pathStripped; //.replace(/^css!/, '');  // remove "css!" prefix
+      e.href = pathStripped;
+
+      // tag IE9+
+      isLegacyIECss = 'hideFocus' in e;
+
+      // use preload in IE Edge (to detect load errors)
+      if (isLegacyIECss && e.relList) {
+        isLegacyIECss = 0;
+        e.rel = 'preload';
+        e.as = 'style';
+      }
     } else if (/(^img!|\.(png|gif|jpg|svg)$)/.test(path)) {
       // image
       e = doc.createElement('img');
@@ -4851,15 +4922,15 @@ typeof navigator === "object" && (function (global, factory) {
     e.onload = e.onerror = e.onbeforeload = function (ev) {
       var result = ev.type[0];
 
-      // Note: The following code isolates IE using `hideFocus` and treats empty
-      // stylesheets as failures to get around lack of onerror support
-      if (isCss && 'hideFocus' in e) {
+      // treat empty stylesheets as failures to get around lack of onerror
+      // support in IE9-11
+      if (isLegacyIECss) {
         try {
           if (!e.sheet.cssText.length) result = 'e';
         } catch (x) {
           // sheets objects created from load errors don't allow access to
-          // `cssText`
-          result = 'e';
+          // `cssText` (unless error is Code:18 SecurityError)
+          if (x.code != 18) result = 'e';
         }
       }
 
@@ -4872,8 +4943,11 @@ typeof navigator === "object" && (function (global, factory) {
         if (numTries < maxTries) {
           return loadFile(path, callbackFn, args, numTries);
         }
+      } else if (e.rel == 'preload' && e.as == 'style') {
+        // activate preloaded stylesheets
+        return e.rel = 'stylesheet'; // jshint ignore:line
       }
-
+      
       // execute callback
       callbackFn(path, result, ev.defaultPrevented);
     };
@@ -4922,9 +4996,11 @@ typeof navigator === "object" && (function (global, factory) {
   /**
    * Initiate script load and register bundle.
    * @param {(string|string[])} paths - The file paths
-   * @param {(string|Function)} [arg1] - The bundleId or success callback
-   * @param {Function} [arg2] - The success or error callback
-   * @param {Function} [arg3] - The error callback
+   * @param {(string|Function|Object)} [arg1] - The (1) bundleId or (2) success
+   *   callback or (3) object literal with success/error arguments, numRetries,
+   *   etc.
+   * @param {(Function|Object)} [arg2] - The (1) success callback or (2) object
+   *   literal with success/error arguments, numRetries, etc.
    */
   function loadjs(paths, arg1, arg2) {
     var bundleId,
@@ -4945,14 +5021,23 @@ typeof navigator === "object" && (function (global, factory) {
       }
     }
 
-    // load scripts
-    loadFiles(paths, function (pathsNotFound) {
-      // execute callbacks
-      executeCallbacks(args, pathsNotFound);
+    function loadFn(resolve, reject) {
+      loadFiles(paths, function (pathsNotFound) {
+        // execute callbacks
+        executeCallbacks(args, pathsNotFound);
+        
+        // resolve Promise
+        if (resolve) {
+          executeCallbacks({success: resolve, error: reject}, pathsNotFound);
+        }
 
-      // publish bundle load event
-      publish(bundleId, pathsNotFound);
-    }, args);
+        // publish bundle load event
+        publish(bundleId, pathsNotFound);
+      }, args);
+    }
+    
+    if (args.returnPromise) return new Promise(loadFn);
+    else loadFn();
   }
 
 
@@ -5835,9 +5920,7 @@ typeof navigator === "object" && (function (global, factory) {
     }
   };
 
-  var Ads =
-  /*#__PURE__*/
-  function () {
+  var Ads = /*#__PURE__*/function () {
     /**
      * Ads constructor.
      * @param {object} player
@@ -6452,9 +6535,7 @@ typeof navigator === "object" && (function (global, factory) {
    * - This implementation uses multiple separate img elements. Other implementations use background-image on one element. This would be nice and simple, but Firefox and Safari have flickering issues with replacing backgrounds of larger images. It seems that Youtube perhaps only avoids this because they don't have the option for high-res previews (even the fullscreen ones, when mousedown/seeking). Images appear over the top of each other, and previous ones are discarded once the new ones have been rendered
    */
 
-  var PreviewThumbnails =
-  /*#__PURE__*/
-  function () {
+  var PreviewThumbnails = /*#__PURE__*/function () {
     /**
      * PreviewThumbnails constructor.
      * @param {object} player
@@ -6508,28 +6589,18 @@ typeof navigator === "object" && (function (global, factory) {
           var urls = typeof configSrc === 'string' ? [configSrc] : configSrc;
           var promises = []; // Loop through each src url. Download and process the VTT file, storing the resulting data in this.thumbnailsDefs
 
-          var _iteratorNormalCompletion = true;
-          var _didIteratorError = false;
-          var _iteratorError = undefined;
+          var _iterator = _createForOfIteratorHelper(urls),
+              _step;
 
           try {
-            for (var _iterator = urls[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+            for (_iterator.s(); !(_step = _iterator.n()).done;) {
               var url = _step.value;
               promises.push(_this2.getThumbnailDef(url));
             }
           } catch (err) {
-            _didIteratorError = true;
-            _iteratorError = err;
+            _iterator.e(err);
           } finally {
-            try {
-              if (!_iteratorNormalCompletion && _iterator.return != null) {
-                _iterator.return();
-              }
-            } finally {
-              if (_didIteratorError) {
-                throw _iteratorError;
-              }
-            }
+            _iterator.f();
           }
 
           Promise.all(promises).then(function () {
@@ -6763,8 +6834,8 @@ typeof navigator === "object" && (function (global, factory) {
         var newImage = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : true;
 
         // Only show if the user is still hovering the same spot
-        // if (thumbFilename === this.showingThumbFilename) {
-        if (this.showingThumb && this.showingThumb === thumbNum) {
+        // if (this.showingThumb && this.showingThumb === thumbNum) {
+        if (this.showingThumb === thumbNum) {
           this.player.debug.log('Showing thumb: ' + thumbFilename + '. num: ' + thumbNum + ". xy:".concat(frame.x, ",").concat(frame.y) + '. qual: ' + qualityIndex + '. newimg: ' + newImage);
           this.setImageSizeAndOffset(previewImage, frame);
 
@@ -6776,8 +6847,8 @@ typeof navigator === "object" && (function (global, factory) {
           // Then show higher quality of the same frame
 
 
-          this.preloadNearby(thumbNum, true).then(function () {
-            return _this7.preloadNearby(thumbNum, false);
+          this.preloadNearby(thumbNum, true, qualityIndex).then(function () {
+            return _this7.preloadNearby(thumbNum, false, qualityIndex);
           }).then(function () {
             return _this7.getHigherQuality(qualityIndex, previewImage, frame, thumbFilename, thumbNum);
           }).catch(function (err) {
@@ -6796,7 +6867,7 @@ typeof navigator === "object" && (function (global, factory) {
         var allImages = Array.from(this.currentContainer.children);
 
         var _loop = function _loop() {
-          var image = allImages[_i];
+          var image = _allImages[_i];
 
           if (image.tagName === 'IMG') {
             var removeDelay = _this8.usingJpegSprites ? 500 : 1000;
@@ -6816,11 +6887,11 @@ typeof navigator === "object" && (function (global, factory) {
           }
         };
 
-        for (var _i = 0; _i < allImages.length; _i++) {
+        for (var _i = 0, _allImages = allImages; _i < _allImages.length; _i++) {
           _loop();
         }
       } // Preload images before and after the current one. Only if the user is still hovering/seeking the same frame
-      // This will only preload the lowest quality
+      // Note that this will not be effective for non-sprited images, and as such should probably be prevented. (Because without spriting, the next hovered image is rarely +1 or -1 from the current one.)
 
     }, {
       key: "preloadNearby",
@@ -6828,23 +6899,24 @@ typeof navigator === "object" && (function (global, factory) {
         var _this9 = this;
 
         var forward = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+        var qualityIndex = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
         return new Promise(function (resolve, reject) {
-          var oldThumbFilename = _this9.thumbnailsDefs[0].frames[thumbNum].text;
+          var oldThumbFilename = _this9.thumbnailsDefs[qualityIndex].frames[thumbNum].text;
 
           if (_this9.showingThumbFilename === oldThumbFilename) {
             // Find the nearest thumbs with different filenames. Sometimes it'll be the next index, but in the case of jpeg sprites, it might be 100+ away
             var thumbnailsDefsCopy;
 
             if (forward) {
-              thumbnailsDefsCopy = _this9.thumbnailsDefs[0].frames.slice(thumbNum);
+              thumbnailsDefsCopy = _this9.thumbnailsDefs[qualityIndex].frames.slice(thumbNum);
             } else {
-              thumbnailsDefsCopy = _this9.thumbnailsDefs[0].frames.slice(0, thumbNum).reverse();
+              thumbnailsDefsCopy = _this9.thumbnailsDefs[qualityIndex].frames.slice(0, thumbNum).reverse();
             }
 
             var foundOne = false;
-            var _iteratorNormalCompletion2 = true;
-            var _didIteratorError2 = false;
-            var _iteratorError2 = undefined;
+
+            var _iterator2 = _createForOfIteratorHelper(thumbnailsDefsCopy),
+                _step2;
 
             try {
               var _loop2 = function _loop2() {
@@ -6858,7 +6930,7 @@ typeof navigator === "object" && (function (global, factory) {
 
                     _this9.player.debug.log('Preloading thumb filename: ' + newThumbFilename);
 
-                    var urlPrefix = _this9.thumbnailsDefs[0].urlPrefix;
+                    var urlPrefix = _this9.thumbnailsDefs[qualityIndex].urlPrefix;
                     var thumbURL = urlPrefix + newThumbFilename;
                     _this9.numLoading += 1;
                     var previewImage = new Image();
@@ -6878,25 +6950,16 @@ typeof navigator === "object" && (function (global, factory) {
                 }
               };
 
-              for (var _iterator2 = thumbnailsDefsCopy[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+              for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
                 var _ret = _loop2();
 
                 if (_ret === "break") break;
               } // If there are none to preload then we want to resolve immediately - this includes if the next one is already preloaded
 
             } catch (err) {
-              _didIteratorError2 = true;
-              _iteratorError2 = err;
+              _iterator2.e(err);
             } finally {
-              try {
-                if (!_iteratorNormalCompletion2 && _iterator2.return != null) {
-                  _iterator2.return();
-                }
-              } finally {
-                if (_didIteratorError2) {
-                  throw _iteratorError2;
-                }
-              }
+              _iterator2.f();
             }
 
             if (!foundOne) resolve();
@@ -7020,20 +7083,20 @@ typeof navigator === "object" && (function (global, factory) {
       value: function parseVtt(vttDataString) {
         var processedList = [];
         var frames = vttDataString.split(/\r\n\r\n|\n\n|\r\r/);
-        var _iteratorNormalCompletion3 = true;
-        var _didIteratorError3 = false;
-        var _iteratorError3 = undefined;
+
+        var _iterator3 = _createForOfIteratorHelper(frames),
+            _step3;
 
         try {
-          for (var _iterator3 = frames[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+          for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
             var frame = _step3.value;
             var result = {};
-            var _iteratorNormalCompletion4 = true;
-            var _didIteratorError4 = false;
-            var _iteratorError4 = undefined;
+
+            var _iterator4 = _createForOfIteratorHelper(frame.split(/\r\n|\n|\r/)),
+                _step4;
 
             try {
-              for (var _iterator4 = frame.split(/\r\n|\n|\r/)[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+              for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
                 var line = _step4.value;
 
                 if (result.startTime == null) {
@@ -7063,18 +7126,9 @@ typeof navigator === "object" && (function (global, factory) {
                 }
               }
             } catch (err) {
-              _didIteratorError4 = true;
-              _iteratorError4 = err;
+              _iterator4.e(err);
             } finally {
-              try {
-                if (!_iteratorNormalCompletion4 && _iterator4.return != null) {
-                  _iterator4.return();
-                }
-              } finally {
-                if (_didIteratorError4) {
-                  throw _iteratorError4;
-                }
-              }
+              _iterator4.f();
             }
 
             if (result.text) {
@@ -7082,18 +7136,9 @@ typeof navigator === "object" && (function (global, factory) {
             }
           }
         } catch (err) {
-          _didIteratorError3 = true;
-          _iteratorError3 = err;
+          _iterator3.e(err);
         } finally {
-          try {
-            if (!_iteratorNormalCompletion3 && _iterator3.return != null) {
-              _iterator3.return();
-            }
-          } finally {
-            if (_didIteratorError3) {
-              throw _iteratorError3;
-            }
-          }
+          _iterator3.f();
         }
 
         return processedList;
@@ -7297,9 +7342,7 @@ typeof navigator === "object" && (function (global, factory) {
   // const globals = new WeakMap();
   // Plyr instance
 
-  var Plyr =
-  /*#__PURE__*/
-  function () {
+  var Plyr = /*#__PURE__*/function () {
     function Plyr(target, options) {
       var _this = this;
 
