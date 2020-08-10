@@ -12,7 +12,8 @@ const concat = require('gulp-concat');
 const filter = require('gulp-filter');
 const sass = require('gulp-sass');
 const cleancss = require('gulp-clean-css');
-const run = require('run-sequence');
+// const run = require('run-sequence');
+const run = require('gulp4-run-sequence');
 const header = require('gulp-header');
 const prefix = require('gulp-autoprefixer');
 const gitbranch = require('git-branch');
@@ -106,13 +107,14 @@ const babelrc = (polyfill = false) => ({
 });
 
 // Clean out /dist
-gulp.task('clean', () => {
+gulp.task('clean', (cb) => {
     const dirs = [paths.plyr.output, paths.demo.output].map(dir => path.join(dir, '**/*'));
 
     // Don't delete the mp4
     dirs.push(`!${path.join(paths.plyr.output, '**/*.mp4')}`);
 
     del(dirs);
+    cb()
 });
 
 const build = {
@@ -201,8 +203,9 @@ build.sass(bundles.demo.sass, 'demo');
 build.js(bundles.demo.js, 'demo', { format: 'iife' });
 
 // Build all JS
-gulp.task('js', () => {
+gulp.task('js', (cb) => {
     run(tasks.js);
+    cb();
 });
 
 // Watch for file changes
@@ -218,13 +221,15 @@ gulp.task('watch', () => {
 });
 
 // Build distribution
-gulp.task('build', () => {
+gulp.task('build', (cb) => {
     run(tasks.clean, tasks.js, tasks.sass, tasks.sprite);
+    cb();
 });
 
 // Default gulp task
-gulp.task('default', () => {
+gulp.task('default', (cb) => {
     run('build', 'watch');
+    cb();
 });
 
 // Publish a version to CDN and demo
@@ -452,7 +457,10 @@ if (Object.keys(credentials).includes('aws') && Object.keys(credentials).include
     });
 
     // Do everything
-    gulp.task('deploy', () =>
-        run('version', tasks.clean, tasks.js, tasks.sass, tasks.sprite, 'cdn', 'purge', 'demo', 'open'),
+    gulp.task('deploy', (cb) => {
+        run('version', tasks.clean, tasks.js, tasks.sass, tasks.sprite, 'cdn', 'purge', 'demo', 'open')
+
+        cb();
+    }
     );
 }
